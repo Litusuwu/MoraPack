@@ -2,7 +2,6 @@ package src.model.algorithm;
 
 import src.model.City;
 import src.model.Constants;
-import src.model.Customer;
 import src.model.Flight;
 import src.model.Package;
 import src.model.Route;
@@ -179,13 +178,13 @@ public class AlgorithmSolver {
         
         // Fase 1: Generar solución inicial con Greedy
         System.out.println("🔄 Fase 1: Construyendo solución inicial con Greedy...");
-        Solution greedySolution = searchGreedy();
+        searchGreedy();
         
         // Fase 2: Mejorar con ALNS
         System.out.println("🔄 Fase 2: Mejorando con ALNS...");
         AlgorithmSolver alnsSolver = new AlgorithmSolver(packages, availableFlights, warehouses, cities);
         alnsSolver.setMaxIterationsALNS(maxIterationsALNS / 2);
-        Solution alnsSolution = alnsSolver.searchALNS();
+        alnsSolver.searchALNS();
         
         // Fase 3: Refinamiento final con Tabu Search
         System.out.println("🔄 Fase 3: Refinamiento final con Tabu Search...");
@@ -704,14 +703,10 @@ public class AlgorithmSolver {
     // ===================== CLASE INTERNA PARA MOVIMIENTOS TABÚ =====================
     
     private static class TabuMove {
-        double fromFitness;
         double toFitness;
-        int iteration;
         
         TabuMove(double fromFitness, double toFitness, int iteration) {
-            this.fromFitness = fromFitness;
             this.toFitness = toFitness;
-            this.iteration = iteration;
         }
         
         @Override

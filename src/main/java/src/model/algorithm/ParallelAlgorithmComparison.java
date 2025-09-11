@@ -6,7 +6,6 @@ import src.model.Route;
 import src.model.Solution;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Comparación paralela de algoritmos metaheurísticos usando múltiples hilos

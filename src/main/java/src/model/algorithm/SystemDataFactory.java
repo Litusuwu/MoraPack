@@ -3,7 +3,6 @@ package src.model.algorithm;
 import src.model.Airport;
 import src.model.City;
 import src.model.Constants;
-import src.model.Continent;
 import src.model.Flight;
 import src.model.Warehouse;
 

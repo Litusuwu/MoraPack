@@ -2,7 +2,6 @@ package src.model.algorithm;
 
 import src.model.Customer;
 import src.model.Package;
-import src.model.Route;
 import src.model.Solution;
 import java.util.*;
 
