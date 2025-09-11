@@ -1,5 +1,15 @@
-package src.model;
+package src.model.algorithm;
 
+import src.model.Airport;
+import src.model.City;
+import src.model.Continent;
+import src.model.Constants;
+import src.model.Customer;
+import src.model.Flight;
+import src.model.Package;
+import src.model.Route;
+import src.model.Solution;
+import src.model.Warehouse;
 import lombok.Getter;
 import lombok.Setter;
 import java.util.*;
@@ -22,6 +32,25 @@ public class MoraPackOptimizer {
     
     public MoraPackOptimizer() {
         initializeSystem();
+    }
+    
+    /**
+     * Constructor with real data from files
+     */
+    public MoraPackOptimizer(String airportFilePath, String flightFilePath) {
+        SystemDataFactory.SystemData systemData = SystemDataFactory.createSystemFromFiles(airportFilePath, flightFilePath);
+        
+        if (systemData != null) {
+            this.cities = systemData.cities;
+            this.airports = systemData.airports;
+            this.warehouses = systemData.warehouses;
+            this.flights = systemData.flights;
+            this.packages = new ArrayList<>();
+            this.customers = new ArrayList<>();
+        } else {
+            // Fallback to default initialization
+            initializeSystem();
+        }
     }
     
     /**
@@ -117,16 +146,21 @@ public class MoraPackOptimizer {
      * Handles day-to-day operations with incoming orders
      */
     public Solution runRealTimeSimulation(List<Package> incomingPackages) {
-        System.out.println("=== Running Real-Time Operations Simulation ===");
+        return runRealTimeSimulation(incomingPackages, AlgorithmType.TABU_SEARCH);
+    }
+    
+    /**
+     * Scenario 1: Real-time operations simulation with specific algorithm
+     * Handles day-to-day operations with incoming orders
+     */
+    public Solution runRealTimeSimulation(List<Package> incomingPackages, AlgorithmType algorithmType) {
+        System.out.println("=== Running Real-Time Operations Simulation with " + algorithmType.getDisplayName() + " ===");
         
         // Update package list
         packages.addAll(incomingPackages);
         
-        // Create and run Tabu Search
-        TabuSearch optimizer = new TabuSearch(packages, flights, warehouses, cities);
-        optimizer.setMaxIterations(500); // Reduced for real-time processing
-        
-        Solution solution = optimizer.solve();
+        // Create and run selected algorithm
+        Solution solution = executeAlgorithm(algorithmType, 500); // Reduced iterations for real-time
         
         // Update system state based on solution
         updateSystemState(solution);
@@ -136,24 +170,33 @@ public class MoraPackOptimizer {
     }
     
     /**
+     * Real-time simulation with algorithm - alias for compatibility
+     */
+    public Solution runRealTimeSimulationWithAlgorithm(List<Package> incomingPackages, AlgorithmType algorithmType) {
+        return runRealTimeSimulation(incomingPackages, algorithmType);
+    }
+    
+    /**
      * Scenario 2: Weekly simulation (30-90 minutes execution time)
      * Comprehensive optimization for weekly package distribution
      */
     public Solution runWeeklySimulation(int packageCount) {
-        System.out.println("=== Running Weekly Simulation ===");
+        return runWeeklySimulation(packageCount, AlgorithmType.HYBRID);
+    }
+    
+    /**
+     * Scenario 2: Weekly simulation with specific algorithm
+     */
+    public Solution runWeeklySimulation(int packageCount, AlgorithmType algorithmType) {
+        System.out.println("=== Running Weekly Simulation with " + algorithmType.getDisplayName() + " ===");
         System.out.println("Expected execution time: 30-90 minutes");
         
         // Generate weekly package load
         List<Package> weeklyPackages = generateWeeklyPackages(packageCount);
         packages.addAll(weeklyPackages);
         
-        // Create and run comprehensive Tabu Search
-        TabuSearch optimizer = new TabuSearch(packages, flights, warehouses, cities);
-        optimizer.setMaxIterations(Constants.MAX_ITERATIONS);
-        optimizer.setMaxIterationsWithoutImprovement(Constants.MAX_ITERATIONS_WITHOUT_IMPROVEMENT);
-        
         long startTime = System.currentTimeMillis();
-        Solution solution = optimizer.solve();
+        Solution solution = executeAlgorithm(algorithmType, Constants.MAX_ITERATIONS);
         long endTime = System.currentTimeMillis();
         
         double executionMinutes = (endTime - startTime) / (1000.0 * 60.0);
@@ -237,7 +280,7 @@ public class MoraPackOptimizer {
     /**
      * Generates random packages for testing
      */
-    private List<Package> generateRandomPackages(int count) {
+    public List<Package> generateRandomPackages(int count) {
         List<Package> randomPackages = new ArrayList<>();
         Random random = new Random();
         
@@ -256,7 +299,7 @@ public class MoraPackOptimizer {
     /**
      * Generates a random customer for testing
      */
-    private Customer generateRandomCustomer() {
+    public Customer generateRandomCustomer() {
         Random random = new Random();
         int customerId = customers.size() + 1;
         City deliveryCity = cities.get(random.nextInt(cities.size()));
@@ -269,6 +312,35 @@ public class MoraPackOptimizer {
         customers.add(customer);
         
         return customer;
+    }
+    
+    /**
+     * Executes the specified algorithm and returns the solution
+     */
+    private Solution executeAlgorithm(AlgorithmType algorithmType, int maxIterations) {
+        src.model.algorithm.AlgorithmSolver solver = new src.model.algorithm.AlgorithmSolver(packages, flights, warehouses, cities);
+        
+        switch (algorithmType) {
+            case GREEDY:
+                return solver.searchGreedy();
+                
+            case TABU_SEARCH:
+                solver.setMaxIterationsTabu(maxIterations);
+                return solver.searchTabu();
+                
+            case ALNS:
+                solver.setMaxIterationsALNS(maxIterations);
+                return solver.searchALNS();
+                
+            case HYBRID:
+                solver.setMaxIterationsALNS(maxIterations / 3);
+                solver.setMaxIterationsTabu(maxIterations / 3);
+                return solver.searchHybrid();
+                
+            default:
+                System.err.println("Algoritmo no soportado: " + algorithmType);
+                return solver.searchGreedy(); // Fallback to Greedy
+        }
     }
     
     /**

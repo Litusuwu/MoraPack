@@ -73,4 +73,16 @@ public class Flight {
             throw new IllegalArgumentException("Cannot remove more packages than currently loaded");
         }
     }
+    
+    public void setMaxCapacity(int maxCapacity) {
+        this.maxCapacity = maxCapacity;
+    }
+    
+    public void setTransportTime(double transportTime) {
+        this.transportTime = transportTime;
+    }
+    
+    public void setCost(double cost) {
+        this.cost = cost;
+    }
 }

@@ -61,4 +61,8 @@ public class Warehouse {
     public double getUtilizationRate() {
         return (double) usedCapacity / maxCapacity;
     }
+    
+    public void setMaxCapacity(int maxCapacity) {
+        this.maxCapacity = maxCapacity;
+    }
 }

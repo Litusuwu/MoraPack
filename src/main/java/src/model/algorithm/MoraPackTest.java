@@ -1,5 +1,12 @@
-package src.model;
+package src.model.algorithm;
 
+import src.model.City;
+import src.model.Constants;
+import src.model.Customer;
+import src.model.Package;
+import src.model.Route;
+import src.model.Solution;
+import src.model.Warehouse;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;

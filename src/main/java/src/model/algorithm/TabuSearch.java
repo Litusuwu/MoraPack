@@ -1,5 +1,12 @@
-package src.model;
+package src.model.algorithm;
 
+import src.model.City;
+import src.model.Constants;
+import src.model.Flight;
+import src.model.Package;
+import src.model.Route;
+import src.model.Solution;
+import src.model.Warehouse;
 import lombok.Getter;
 import lombok.Setter;
 import java.util.*;
@@ -17,6 +24,7 @@ public class TabuSearch {
     private int tabuListSize;
     private int maxIterations;
     private int maxIterationsWithoutImprovement;
+    private Solution initialSolution; // For hybrid algorithms
     
     public TabuSearch(List<Package> packages, List<Flight> availableFlights, 
                      List<Warehouse> warehouses, List<City> cities) {
@@ -28,6 +36,11 @@ public class TabuSearch {
         this.tabuListSize = Constants.TABU_LIST_SIZE;
         this.maxIterations = Constants.MAX_ITERATIONS;
         this.maxIterationsWithoutImprovement = Constants.MAX_ITERATIONS_WITHOUT_IMPROVEMENT;
+    }
+    
+    public void setBestSolution(Solution solution) {
+        this.bestSolution = new Solution(solution);
+        this.currentSolution = new Solution(solution);
     }
     
     public Solution solve() {

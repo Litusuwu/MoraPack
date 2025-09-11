@@ -40,4 +40,16 @@ public class Airport {
     public double getAvailableCapacity() {
         return maxCapacity - usedCapacity;
     }
+    
+    public void setTimezoneUTC(int timezoneUTC) {
+        this.timezoneUTC = timezoneUTC;
+    }
+    
+    public void setMaxCapacity(double maxCapacity) {
+        this.maxCapacity = maxCapacity;
+    }
+    
+    public void setWarehouse(Warehouse warehouse) {
+        this.warehouse = warehouse;
+    }
 }
