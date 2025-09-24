@@ -1,4 +1,4 @@
-package src.model;
+package src.schemas;
 
 import lombok.Getter;
 import lombok.Setter;

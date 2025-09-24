@@ -1,4 +1,4 @@
-package src.model;
+package src.schemas;
 
 public enum PackageStatus {
     PENDING,
