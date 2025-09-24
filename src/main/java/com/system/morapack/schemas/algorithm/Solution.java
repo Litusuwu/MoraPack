@@ -6,9 +6,11 @@ import com.system.morapack.schemas.Flight;
 import com.system.morapack.schemas.Package;
 import com.system.morapack.config.Constants;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
@@ -25,6 +27,8 @@ public class Solution {
     private HashMap<Airport, Integer> warehouseOccupancy;
     // Matriz temporal para validar capacidad de almacenes por minuto [aeropuerto][minuto_del_dia]
     private HashMap<Airport, int[]> temporalWarehouseOccupancy;
+    // Generador de números aleatorios para diversificar soluciones
+    private Random random;
 
     
     public Solution() {
@@ -38,6 +42,8 @@ public class Solution {
         this.packages = inputProducts.readProducts();
         this.warehouseOccupancy = new HashMap<>();
         this.temporalWarehouseOccupancy = new HashMap<>();
+        // Inicializar generador de números aleatorios con semilla basada en tiempo actual
+        this.random = new Random(System.currentTimeMillis());
         // Inicializar ocupación de almacenes
         initializeWarehouseOccupancy();
         initializeTemporalWarehouseOccupancy();
@@ -60,7 +66,7 @@ public class Solution {
         System.out.println("Solución válida: " + (isValid ? "SÍ" : "NO"));
         
         // Mostrar descripción de la solución inicial
-        this.printSolutionDescription(3);
+        this.printSolutionDescription(1);
         // 3. Establecer s_mejor = s_actual
         // 4. Inicializar los pesos w(op_d, op_r) para todos los pares de operadores de destrucción (d) y reparación (r)
         // 5. Inicializar los puntajes p(op_d, op_r) = 0
@@ -108,9 +114,48 @@ public class Solution {
         // Crear estructura de solución temporal
         HashMap<Package, ArrayList<Flight>> currentSolution = new HashMap<>();
         
-        // Ordenar paquetes por prioridad (deadline más cercano primero)
+        // Ordenar paquetes con un componente aleatorio
         ArrayList<Package> sortedPackages = new ArrayList<>(packages);
-        sortedPackages.sort((p1, p2) -> p1.getDeliveryDeadline().compareTo(p2.getDeliveryDeadline()));
+        
+        // Decidir aleatoriamente entre diferentes estrategias de ordenamiento
+        int sortStrategy = random.nextInt(5); // Añadido una estrategia más
+        
+        switch (sortStrategy) {
+            case 0:
+                // Ordenamiento por deadline (original)
+                System.out.println("Estrategia de ordenamiento: Por deadline");
+                sortedPackages.sort((p1, p2) -> p1.getDeliveryDeadline().compareTo(p2.getDeliveryDeadline()));
+                break;
+            case 1:
+                // Ordenamiento por prioridad
+                System.out.println("Estrategia de ordenamiento: Por prioridad");
+                sortedPackages.sort((p1, p2) -> Double.compare(p2.getPriority(), p1.getPriority()));
+                break;
+            case 2:
+                // Ordenamiento por distancia entre continentes
+                System.out.println("Estrategia de ordenamiento: Por distancia entre continentes");
+                sortedPackages.sort((p1, p2) -> {
+                    boolean p1DiffContinent = p1.getCurrentLocation().getContinent() != p1.getDestinationCity().getContinent();
+                    boolean p2DiffContinent = p2.getCurrentLocation().getContinent() != p2.getDestinationCity().getContinent();
+                    return Boolean.compare(p1DiffContinent, p2DiffContinent);
+                });
+                break;
+            case 3:
+                // Ordenamiento por margen de tiempo (más urgentes primero)
+                System.out.println("Estrategia de ordenamiento: Por margen de tiempo");
+                sortedPackages.sort((p1, p2) -> {
+                    LocalDateTime now = LocalDateTime.now();
+                    long p1Margin = ChronoUnit.HOURS.between(now, p1.getDeliveryDeadline());
+                    long p2Margin = ChronoUnit.HOURS.between(now, p2.getDeliveryDeadline());
+                    return Long.compare(p1Margin, p2Margin);
+                });
+                break;
+            case 4:
+                // Ordenamiento aleatorio
+                System.out.println("Estrategia de ordenamiento: Aleatorio");
+                Collections.shuffle(sortedPackages, random);
+                break;
+        }
         
         int assignedPackages = 0;
         
@@ -157,21 +202,119 @@ public class Solution {
             return new ArrayList<>();
         }
         
-        // Buscar ruta directa primero
+        // Introducir aleatoriedad en el orden de búsqueda de rutas
+        ArrayList<ArrayList<Flight>> validRoutes = new ArrayList<>();
+        ArrayList<String> routeTypes = new ArrayList<>();
+        ArrayList<Double> routeScores = new ArrayList<>(); // Puntajes para cada ruta
+        
+        // 1. Buscar ruta directa
         ArrayList<Flight> directRoute = findDirectRoute(origin, destination);
-        if (directRoute != null) {
-            return directRoute;
+        if (directRoute != null && isRouteValid(pkg, directRoute)) {
+            validRoutes.add(directRoute);
+            routeTypes.add("directa");
+            
+            // Calcular margen de tiempo para la ruta directa
+            double directScore = calculateRouteTimeMargin(pkg, directRoute);
+            routeScores.add(directScore);
         }
         
-        // Buscar ruta con una escala
+        // 2. Buscar ruta con una escala
         ArrayList<Flight> oneStopRoute = findOneStopRoute(origin, destination);
-        if (oneStopRoute != null) {
-            return oneStopRoute;
+        if (oneStopRoute != null && isRouteValid(pkg, oneStopRoute)) {
+            validRoutes.add(oneStopRoute);
+            routeTypes.add("una escala");
+            
+            // Calcular margen de tiempo para la ruta con una escala
+            double oneStopScore = calculateRouteTimeMargin(pkg, oneStopRoute);
+            routeScores.add(oneStopScore);
         }
         
-        // Buscar ruta con dos escalas (máximo)
+        // 3. Buscar ruta con dos escalas
         ArrayList<Flight> twoStopRoute = findTwoStopRoute(origin, destination);
-        return twoStopRoute;
+        if (twoStopRoute != null && isRouteValid(pkg, twoStopRoute)) {
+            validRoutes.add(twoStopRoute);
+            routeTypes.add("dos escalas");
+            
+            // Calcular margen de tiempo para la ruta con dos escalas
+            double twoStopScore = calculateRouteTimeMargin(pkg, twoStopRoute);
+            routeScores.add(twoStopScore);
+        }
+        
+        // Si no hay rutas válidas, intentar un segundo pase con menos restricciones
+        if (validRoutes.isEmpty()) {
+            // Podríamos implementar un reintento con criterios más flexibles aquí
+            return null;
+        }
+        
+        // Seleccionar una ruta basada en probabilidad ponderada por margen de tiempo
+        int totalRoutes = validRoutes.size();
+        int selectedIndex;
+        
+        if (totalRoutes > 1) {
+            // Calcular probabilidades basadas en puntajes
+            double totalScore = 0;
+            for (double score : routeScores) {
+                totalScore += score;
+            }
+            
+            if (totalScore > 0) {
+                // Selección con probabilidad proporcional al margen de tiempo
+                double rand = random.nextDouble() * totalScore;
+                double cumulativeScore = 0;
+                selectedIndex = 0;
+                
+                for (int i = 0; i < routeScores.size(); i++) {
+                    cumulativeScore += routeScores.get(i);
+                    if (rand <= cumulativeScore) {
+                        selectedIndex = i;
+                        break;
+                    }
+                }
+            } else {
+                // Si todos los puntajes son 0 o negativos, selección aleatoria simple
+                selectedIndex = random.nextInt(totalRoutes);
+            }
+        } else {
+            // Solo hay una ruta disponible
+            selectedIndex = 0;
+        }
+        
+        return validRoutes.get(selectedIndex);
+    }
+    
+    /**
+     * Calcula un puntaje para una ruta basado en el margen de tiempo antes del deadline
+     * Rutas con mayor margen reciben puntajes más altos
+     */
+    private double calculateRouteTimeMargin(Package pkg, ArrayList<Flight> route) {
+        double totalTime = 0;
+        
+        // Calcular tiempo total de la ruta
+        for (Flight flight : route) {
+            totalTime += flight.getTransportTime();
+        }
+        
+        // Añadir penalizaciones
+        if (route.size() > 1) {
+            totalTime += (route.size() - 1) * 2.0; // Conexiones
+        }
+        
+        // Penalización por continente
+        boolean sameContinentRoute = pkg.getCurrentLocation().getContinent() == pkg.getDestinationCity().getContinent();
+        if (sameContinentRoute) {
+            totalTime += Constants.SAME_CONTINENT_TRANSPORT_TIME;
+        } else {
+            totalTime += Constants.DIFFERENT_CONTINENT_TRANSPORT_TIME;
+        }
+        
+        // Calcular margen antes del deadline (en horas)
+        LocalDateTime now = LocalDateTime.now();
+        long hoursUntilDeadline = ChronoUnit.HOURS.between(now, pkg.getDeliveryDeadline());
+        double margin = hoursUntilDeadline - totalTime;
+        
+        // Convertir margen a un puntaje (mayor margen = mayor puntaje)
+        // Puntaje mínimo es 1 para rutas válidas
+        return Math.max(margin * 10, 1.0);
     }
     
     private ArrayList<Flight> findDirectRoute(City origin, City destination) {
@@ -205,11 +348,19 @@ public class Solution {
             return null;
         }
         
-        // Buscar escala intermedia
-        for (Airport intermediateAirport : airports) {
-            if (intermediateAirport.equals(originAirport) || intermediateAirport.equals(destinationAirport)) {
-                continue;
+        // Crear una lista de aeropuertos intermedios potenciales y barajarla
+        ArrayList<Airport> potentialIntermediates = new ArrayList<>();
+        for (Airport airport : airports) {
+            if (!airport.equals(originAirport) && !airport.equals(destinationAirport)) {
+                potentialIntermediates.add(airport);
             }
+        }
+        
+        // Barajar la lista para explorar aeropuertos intermedios en orden aleatorio
+        Collections.shuffle(potentialIntermediates, random);
+        
+        // Buscar escala intermedia
+        for (Airport intermediateAirport : potentialIntermediates) {
             
             // Buscar vuelo de origen a intermedio
             Flight firstFlight = null;
@@ -254,18 +405,41 @@ public class Solution {
             return null;
         }
         
+        // Crear listas de posibles aeropuertos intermedios
+        ArrayList<Airport> firstIntermediates = new ArrayList<>();
+        for (Airport airport : airports) {
+            if (!airport.equals(originAirport) && !airport.equals(destinationAirport)) {
+                firstIntermediates.add(airport);
+            }
+        }
+        
+        // Barajar la primera lista de intermedios
+        Collections.shuffle(firstIntermediates, random);
+        
+        // Limitar la búsqueda a un subconjunto aleatorio para mejorar rendimiento
+        int maxFirstIntermediates = Math.min(10, firstIntermediates.size());
+        
         // Buscar ruta con dos escalas intermedias
-        for (Airport firstIntermediate : airports) {
-            if (firstIntermediate.equals(originAirport) || firstIntermediate.equals(destinationAirport)) {
-                continue;
+        for (int i = 0; i < maxFirstIntermediates; i++) {
+            Airport firstIntermediate = firstIntermediates.get(i);
+            
+            // Crear y barajar lista de segundos intermedios
+            ArrayList<Airport> secondIntermediates = new ArrayList<>();
+            for (Airport airport : airports) {
+                if (!airport.equals(originAirport) && 
+                    !airport.equals(destinationAirport) &&
+                    !airport.equals(firstIntermediate)) {
+                    secondIntermediates.add(airport);
+                }
             }
             
-            for (Airport secondIntermediate : airports) {
-                if (secondIntermediate.equals(originAirport) || 
-                    secondIntermediate.equals(destinationAirport) ||
-                    secondIntermediate.equals(firstIntermediate)) {
-                    continue;
-                }
+            Collections.shuffle(secondIntermediates, random);
+            
+            // Limitar también la búsqueda del segundo intermedio
+            int maxSecondIntermediates = Math.min(10, secondIntermediates.size());
+            
+            for (int j = 0; j < maxSecondIntermediates; j++) {
+                Airport secondIntermediate = secondIntermediates.get(j);
                 
                 // Buscar primer vuelo: origen -> primera escala
                 Flight firstFlight = null;
@@ -370,6 +544,11 @@ public class Solution {
             totalTime += flight.getTransportTime();
         }
         
+        // Añadir penalización por conexiones (2 horas por conexión)
+        if (route.size() > 1) {
+            totalTime += (route.size() - 1) * 2.0;
+        }
+        
         // Agregar tiempo de traslado según continente
         City origin = pkg.getCurrentLocation();
         City destination = pkg.getDestinationCity();
@@ -380,6 +559,15 @@ public class Solution {
             totalTime += Constants.SAME_CONTINENT_TRANSPORT_TIME;
         } else {
             totalTime += Constants.DIFFERENT_CONTINENT_TRANSPORT_TIME;
+        }
+        
+        // Factor de seguridad aleatorio (1-10%) para asegurar entregas a tiempo
+        // Más margen de seguridad para rutas complejas o intercontinentales
+        double safetyMargin = 0.0;
+        if (random != null) { // Verificar que random esté inicializado
+            int complexityFactor = route.size() + (sameContinentRoute ? 0 : 2);
+            safetyMargin = 0.01 * (1 + random.nextInt(complexityFactor * 3));
+            totalTime = totalTime * (1.0 + safetyMargin); // Aumentar tiempo estimado para ser conservadores
         }
         
         // Convertir tiempo límite a horas para comparar
@@ -401,12 +589,14 @@ public class Solution {
         // 2. Tiempo total de entrega (minimizar)
         // 3. Utilización de capacidad de vuelos (maximizar)
         // 4. Cumplimiento de deadlines (maximizar)
+        // 5. Margen de seguridad antes de deadline (maximizar)
         
         int totalPackages = solutionMap.size();
         double totalDeliveryTime = 0;
         int onTimeDeliveries = 0;
         double totalCapacityUtilization = 0;
         int totalFlightsUsed = 0;
+        double totalDeliveryMargin = 0; // Margen total antes del deadline
         
         // Calcular métricas
         for (Map.Entry<Package, ArrayList<Flight>> entry : solutionMap.entrySet()) {
@@ -420,11 +610,22 @@ public class Solution {
                 totalCapacityUtilization += (double) flight.getUsedCapacity() / flight.getMaxCapacity();
                 totalFlightsUsed++;
             }
+            
+            // Añadir penalización por conexiones
+            if (route.size() > 1) {
+                routeTime += (route.size() - 1) * 2.0; // 2 horas por cada conexión
+            }
+            
             totalDeliveryTime += routeTime;
             
-            // Verificar si llega a tiempo
+            // Verificar si llega a tiempo y calcular margen
             if (isDeadlineRespected(pkg, route)) {
                 onTimeDeliveries++;
+                
+                // Calcular margen de tiempo antes del deadline (en horas)
+                LocalDateTime estimatedDelivery = pkg.getOrderDate().plusHours((long)routeTime);
+                double marginHours = ChronoUnit.HOURS.between(estimatedDelivery, pkg.getDeliveryDeadline());
+                totalDeliveryMargin += marginHours;
             }
         }
         
@@ -433,14 +634,22 @@ public class Solution {
         double avgDeliveryTime = totalPackages > 0 ? totalDeliveryTime / totalPackages : 0;
         double avgCapacityUtilization = totalFlightsUsed > 0 ? totalCapacityUtilization / totalFlightsUsed : 0;
         double onTimeRate = totalPackages > 0 ? (double) onTimeDeliveries / totalPackages : 0;
+        double avgDeliveryMargin = onTimeDeliveries > 0 ? totalDeliveryMargin / onTimeDeliveries : 0;
         
-        // Peso final (los factores pueden ajustarse según prioridades)
+        // Peso final con énfasis extremo en entregas a tiempo
         int weight = (int) (
-            totalPackages * 1000 +           // Más paquetes asignados = mejor
-            onTimeRate * 1000 +             // Más entregas a tiempo = mejor
-            avgCapacityUtilization * 500 -    // Mayor utilización = mejor
-            avgDeliveryTime * 400            // Menos tiempo promedio = mejor
+            totalPackages * 500 +             // Más paquetes asignados = mejor
+            onTimeRate * 5000 +               // Entregas a tiempo con MÁXIMA prioridad
+            Math.min(avgDeliveryMargin * 100, 1000) + // Premiar margen de seguridad (máx 1000)
+            avgCapacityUtilization * 200 -    // Mayor utilización = mejor
+            avgDeliveryTime * 100             // Menos tiempo promedio = mejor
         );
+        
+        // Penalización SEVERA si hay entregas tardías
+        if (onTimeRate < 1.0) {
+            // Reducir drásticamente el peso si hay entregas tardías
+            weight = (int)(weight * Math.pow(onTimeRate, 3)); // Penalización cúbica
+        }
         
         return weight;
     }
