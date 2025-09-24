@@ -1,4 +1,4 @@
-package src.schemas;
+package com.system.morapack.schemas;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
