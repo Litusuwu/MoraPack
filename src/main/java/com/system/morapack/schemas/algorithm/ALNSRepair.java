@@ -4,14 +4,12 @@ import com.system.morapack.schemas.Flight;
 import com.system.morapack.schemas.Package;
 import com.system.morapack.schemas.City;
 import com.system.morapack.schemas.Airport;
-import com.system.morapack.schemas.Continent;
 import com.system.morapack.config.Constants;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 import java.util.Collections;
-import java.util.List;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
@@ -65,7 +63,13 @@ public class ALNSRepair {
             packagesToRepair.add(entry.getKey());
         }
         
-        packagesToRepair.sort((p1, p2) -> p1.getDeliveryDeadline().compareTo(p2.getDeliveryDeadline()));
+        // PATCH: Null-safe sorting
+        packagesToRepair.sort((p1, p2) -> {
+            if (p1.getDeliveryDeadline() == null && p2.getDeliveryDeadline() == null) return 0;
+            if (p1.getDeliveryDeadline() == null) return 1; // nulls last
+            if (p2.getDeliveryDeadline() == null) return -1; // nulls last
+            return p1.getDeliveryDeadline().compareTo(p2.getDeliveryDeadline());
+        });
         
         int reinsertedCount = 0;
         
@@ -84,7 +88,7 @@ public class ALNSRepair {
             
             // Buscar la mejor ruta
             ArrayList<Flight> bestRoute = findBestRoute(pkg);
-            if (bestRoute != null && isRouteValid(pkg, bestRoute)) {
+            if (bestRoute != null && isRouteValid(pkg, bestRoute, productCount)) {
                 repairedSolution.put(pkg, bestRoute);
                 updateFlightCapacities(bestRoute, productCount);
                 incrementWarehouseOccupancy(destinationAirport, productCount);
@@ -227,7 +231,7 @@ public class ALNSRepair {
             
             // Buscar ruta con mayor margen de tiempo
             ArrayList<Flight> bestRoute = findRouteWithMaxMargin(pkg);
-            if (bestRoute != null && isRouteValid(pkg, bestRoute)) {
+            if (bestRoute != null && isRouteValid(pkg, bestRoute, productCount)) {
                 repairedSolution.put(pkg, bestRoute);
                 updateFlightCapacities(bestRoute, productCount);
                 incrementWarehouseOccupancy(destinationAirport, productCount);
@@ -259,7 +263,13 @@ public class ALNSRepair {
         }
         
         // Ordenar por deadline como criterio secundario
-        packagesToRepair.sort((p1, p2) -> p1.getDeliveryDeadline().compareTo(p2.getDeliveryDeadline()));
+        // PATCH: Null-safe sorting
+        packagesToRepair.sort((p1, p2) -> {
+            if (p1.getDeliveryDeadline() == null && p2.getDeliveryDeadline() == null) return 0;
+            if (p1.getDeliveryDeadline() == null) return 1; // nulls last
+            if (p2.getDeliveryDeadline() == null) return -1; // nulls last
+            return p1.getDeliveryDeadline().compareTo(p2.getDeliveryDeadline());
+        });
         
         int reinsertedCount = 0;
         
@@ -274,7 +284,7 @@ public class ALNSRepair {
             
             // Buscar ruta con mayor capacidad disponible
             ArrayList<Flight> bestRoute = findRouteWithMaxCapacity(pkg);
-            if (bestRoute != null && isRouteValid(pkg, bestRoute)) {
+            if (bestRoute != null && isRouteValid(pkg, bestRoute, productCount)) {
                 repairedSolution.put(pkg, bestRoute);
                 updateFlightCapacities(bestRoute, productCount);
                 incrementWarehouseOccupancy(destinationAirport, productCount);
@@ -370,41 +380,58 @@ public class ALNSRepair {
         return capacityOptions.get(0).route;
     }
     
+    /**
+     * PATCH: Calcula margen sin doble conteo y usando orderDate
+     */
     private double calculateRouteTimeMargin(Package pkg, ArrayList<Flight> route) {
-        double totalTime = 0;
+        if (route == null || route.isEmpty()) {
+            return 0.0;
+        }
         
+        // Sumar solo tiempo de vuelos + conexiones (sin extras por continente)
+        double totalTime = 0.0;
         for (Flight flight : route) {
             totalTime += flight.getTransportTime();
         }
         
-        if (route.size() > 1) {
-            totalTime += (route.size() - 1) * 2.0; // Conexiones
+        // Agregar tiempo de conexión (2 horas por conexión)
+        totalTime += (route.size() - 1) * 2.0;
+        
+        // PATCH: Usar orderDate vs deadline, null-safe
+        if (pkg.getOrderDate() == null || pkg.getDeliveryDeadline() == null) {
+            return 1.0;
         }
         
-        boolean sameContinentRoute = pkg.getCurrentLocation().getContinent() == pkg.getDestinationCity().getContinent();
-        if (sameContinentRoute) {
-            totalTime += Constants.SAME_CONTINENT_TRANSPORT_TIME;
-        } else {
-            totalTime += Constants.DIFFERENT_CONTINENT_TRANSPORT_TIME;
-        }
+        // Calcular presupuesto de horas desde orderDate
+        long budget = ChronoUnit.HOURS.between(pkg.getOrderDate(), pkg.getDeliveryDeadline());
+        if (budget < 0) budget = 0; // Clamp negativo
         
-        LocalDateTime now = LocalDateTime.now();
-        long hoursUntilDeadline = ChronoUnit.HOURS.between(now, pkg.getDeliveryDeadline());
-        double margin = hoursUntilDeadline - totalTime;
-        
-        return Math.max(margin * 10, 1.0);
+        double margin = budget - totalTime;
+        return Math.max(margin, 0.0) + 1.0;
     }
     
-    private boolean isRouteValid(Package pkg, ArrayList<Flight> route) {
+    /**
+     * PATCH: Helper para validar capacidad de ruta con cantidad específica
+     */
+    private boolean fitsRouteCapacity(ArrayList<Flight> route, int qty) {
+        if (route == null) return false;
+        for (Flight f : route) {
+            if (f.getUsedCapacity() + qty > f.getMaxCapacity()) return false;
+        }
+        return true;
+    }
+    
+    /**
+     * PATCH: Versión con cantidad específica de productos
+     */
+    private boolean isRouteValid(Package pkg, ArrayList<Flight> route, int qty) {
         if (route == null || route.isEmpty()) {
             return pkg.getCurrentLocation().equals(pkg.getDestinationCity());
         }
         
-        // Verificar capacidad de vuelos
-        for (Flight flight : route) {
-            if (flight.getUsedCapacity() >= flight.getMaxCapacity()) {
-                return false;
-            }
+        // Verificar capacidad de vuelos con cantidad específica
+        if (!fitsRouteCapacity(route, qty)) {
+            return false;
         }
         
         // Verificar continuidad de ruta
@@ -425,38 +452,40 @@ public class ALNSRepair {
         return isDeadlineRespected(pkg, route);
     }
     
+    /**
+     * PATCH: Versión original que delega calculando qty
+     */
+    private boolean isRouteValid(Package pkg, ArrayList<Flight> route) {
+        int qty = (pkg.getProducts() != null && !pkg.getProducts().isEmpty()) ? pkg.getProducts().size() : 1;
+        return isRouteValid(pkg, route, qty);
+    }
+    
+    /**
+     * PATCH: Verifica deadline sin doble conteo y null-safe
+     */
     private boolean isDeadlineRespected(Package pkg, ArrayList<Flight> route) {
-        double totalTime = 0;
+        if (route == null || route.isEmpty()) {
+            return false;
+        }
         
+        // PATCH: Null-safe
+        if (pkg.getOrderDate() == null || pkg.getDeliveryDeadline() == null) {
+            return false;
+        }
+        
+        // Sumar solo tiempo de vuelos + conexiones
+        double totalTime = 0.0;
         for (Flight flight : route) {
             totalTime += flight.getTransportTime();
         }
         
-        if (route.size() > 1) {
-            totalTime += (route.size() - 1) * 2.0;
-        }
+        // Agregar tiempo de conexión
+        totalTime += (route.size() - 1) * 2.0;
         
-        City origin = pkg.getCurrentLocation();
-        City destination = pkg.getDestinationCity();
-        boolean sameContinentRoute = origin.getContinent() == destination.getContinent();
+        // Calcular tiempo disponible desde orderDate
+        long hoursUntilDeadline = ChronoUnit.HOURS.between(pkg.getOrderDate(), pkg.getDeliveryDeadline());
         
-        if (sameContinentRoute) {
-            totalTime += Constants.SAME_CONTINENT_TRANSPORT_TIME;
-        } else {
-            totalTime += Constants.DIFFERENT_CONTINENT_TRANSPORT_TIME;
-        }
-        
-        // Factor de seguridad
-        if (random != null) {
-            int complexityFactor = route.size() + (sameContinentRoute ? 0 : 2);
-            double safetyMargin = 0.01 * (1 + random.nextInt(complexityFactor * 3));
-            totalTime = totalTime * (1.0 + safetyMargin);
-        }
-        
-        LocalDateTime now = LocalDateTime.now();
-        long hoursUntilDeadline = ChronoUnit.HOURS.between(now, pkg.getDeliveryDeadline());
-        
-        return totalTime <= hoursUntilDeadline;
+        return hoursUntilDeadline >= totalTime;
     }
     
     // Métodos de búsqueda de rutas (simplificados, podrían referenciar a Solution.java)
@@ -615,9 +644,17 @@ public class ALNSRepair {
         return null;
     }
     
+    /**
+     * PATCH: City→Airport robusto por nombre (evita equals frágil)
+     */
     private Airport getAirportByCity(City city) {
+        if (city == null || city.getName() == null) return null;
+        
+        String cityName = city.getName().trim().toLowerCase();
+        
         for (Airport airport : airports) {
-            if (airport.getCity().equals(city)) {
+            if (airport.getCity() != null && airport.getCity().getName() != null &&
+                airport.getCity().getName().trim().toLowerCase().equals(cityName)) {
                 return airport;
             }
         }

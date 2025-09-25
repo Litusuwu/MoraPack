@@ -25,7 +25,6 @@ public class InputProducts {
     private ArrayList<Airport> airports;
     private Map<String, Airport> airportMap;
     private Random random;
-    private int packageId = 1;
     private int productId = 1;
 
     public InputProducts(String filePath, ArrayList<Airport> airports) {

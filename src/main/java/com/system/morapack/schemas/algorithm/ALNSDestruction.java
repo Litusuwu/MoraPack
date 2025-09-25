@@ -2,16 +2,12 @@ package com.system.morapack.schemas.algorithm;
 
 import com.system.morapack.schemas.Flight;
 import com.system.morapack.schemas.Package;
-import com.system.morapack.schemas.City;
 import com.system.morapack.schemas.Continent;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
-import java.util.Set;
 import java.util.Collections;
-import java.util.List;
-import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
 /**
@@ -37,8 +33,44 @@ public class ALNSDestruction {
     }
     
     /**
-     * Destrucción aleatoria: elimina un número aleatorio de paquetes de la solución.
-     * Prioritiza la eliminación de paquetes con mayor margen de tiempo.
+     * CORRECCIÓN: Helpers para cálculos precisos de slack y productos
+     */
+    private static double routeHours(ArrayList<Flight> route) {
+        if (route == null || route.isEmpty()) return Double.POSITIVE_INFINITY;
+        double h = 0;
+        for (Flight f : route) h += f.getTransportTime();
+        if (route.size() > 1) h += (route.size() - 1) * 2.0; // conexiones de 2h
+        return h;
+    }
+    
+    private static int productsOf(Package pkg) {
+        return (pkg.getProducts() != null && !pkg.getProducts().isEmpty()) ? pkg.getProducts().size() : 1;
+    }
+    
+    /**
+     * CORRECCIÓN: Slack real - horas disponibles desde orderDate menos horas de la ruta actual
+     * REFINAMIENTO: Clampar slack negativo por deadlines raros (deadline < orderDate)
+     */
+    private static double slackHours(Package pkg, ArrayList<Flight> route) {
+        long budget = ChronoUnit.HOURS.between(pkg.getOrderDate(), pkg.getDeliveryDeadline());
+        // REFINAMIENTO: Clampar budget negativo a 0 para evitar data mala
+        if (budget < 0) {
+            budget = 0; // Deadline en el pasado o mal configurado
+        }
+        double slack = budget - routeHours(route);
+        return Math.max(slack, 0.0); // REFINAMIENTO: Clampar slack final a >= 0
+    }
+    
+    /**
+     * REFINAMIENTO: Verificar si un paquete ya está en destino (ruta null/empty)
+     * Estos paquetes no liberan capacidad de vuelo
+     */
+    private static boolean isAlreadyAtDestination(ArrayList<Flight> route) {
+        return route == null || route.isEmpty();
+    }
+    
+    /**
+     * CORRECCIÓN: Destrucción aleatoria mejorada - sesgo por mayor slack y más productos
      */
     public DestructionResult randomDestroy(
             HashMap<Package, ArrayList<Flight>> currentSolution,
@@ -47,53 +79,67 @@ public class ALNSDestruction {
             int maxDestroy) {
         
         HashMap<Package, ArrayList<Flight>> partialSolution = new HashMap<>(currentSolution);
-        ArrayList<Package> packages = new ArrayList<>(currentSolution.keySet());
         
-        int numPackages = packages.size();
-        int numToDestroy = Math.min(
-            Math.max((int)(numPackages * destructionRate), minDestroy),
-            Math.min(maxDestroy, numPackages)
-        );
-        
-        ArrayList<Map.Entry<Package, ArrayList<Flight>>> destroyedPackages = new ArrayList<>();
-        
-        // Ordenar paquetes por margen de tiempo (mayor margen primero para destruir)
-        packages.sort((p1, p2) -> {
-            LocalDateTime now = LocalDateTime.now();
-            long p1Margin = ChronoUnit.HOURS.between(now, p1.getDeliveryDeadline());
-            long p2Margin = ChronoUnit.HOURS.between(now, p2.getDeliveryDeadline());
-            return Long.compare(p2Margin, p1Margin); // Mayor margen primero
-        });
-        
-        // Usar selección probabilística: mayor probabilidad para paquetes con más margen
-        for (int i = 0; i < numToDestroy && !packages.isEmpty(); i++) {
-            int selectedIndex;
-            if (packages.size() > 10) {
-                // Seleccionar con sesgo hacia los primeros (más margen)
-                double rand = random.nextDouble();
-                if (rand < 0.6) {
-                    selectedIndex = random.nextInt(Math.min(packages.size() / 3, 10));
-                } else if (rand < 0.9) {
-                    selectedIndex = random.nextInt(Math.min(packages.size() / 2, packages.size()));
-                } else {
-                    selectedIndex = random.nextInt(packages.size());
-                }
-            } else {
-                selectedIndex = random.nextInt(packages.size());
-            }
-            
-            Package selectedPackage = packages.get(selectedIndex);
-            
-            destroyedPackages.add(Map.entry(
-                selectedPackage, 
-                new ArrayList<>(partialSolution.get(selectedPackage))
-            ));
-            
-            partialSolution.remove(selectedPackage);
-            packages.remove(selectedIndex);
+        if (currentSolution.isEmpty()) {
+            return new DestructionResult(partialSolution, new ArrayList<>());
         }
         
-        return new DestructionResult(partialSolution, destroyedPackages);
+        // CORRECCIÓN: Construir lista con score = w1*slack + w2*productos
+        class Cand { 
+            Package pkg; 
+            ArrayList<Flight> route; 
+            double score; 
+        }
+        
+        ArrayList<Cand> cands = new ArrayList<>();
+        for (Map.Entry<Package, ArrayList<Flight>> e : currentSolution.entrySet()) {
+            Package p = e.getKey();
+            ArrayList<Flight> r = e.getValue();
+            double slack = slackHours(p, r);
+            int prods = productsOf(p);
+            
+            // REFINAMIENTO: Penalizar fuertemente paquetes ya en destino (no liberan capacidad de vuelo)
+            if (isAlreadyAtDestination(r)) {
+                slack = slack * 0.1; // Reducir significativamente su prioridad
+            }
+            
+            double score = 1.0 * slack + 0.2 * prods; // pesos: slack y productos
+            
+            Cand c = new Cand();
+            c.pkg = p; 
+            c.route = r; 
+            c.score = score;
+            cands.add(c);
+        }
+        
+        // CORRECCIÓN: Ordenar por score desc y destruir los top-k con diversidad
+        cands.sort((a, b) -> Double.compare(b.score, a.score));
+        
+        int numToDestroy = Math.min(
+            Math.max((int)(currentSolution.size() * destructionRate), minDestroy),
+            Math.min(maxDestroy, currentSolution.size())
+        );
+        
+        ArrayList<Map.Entry<Package, ArrayList<Flight>>> destroyed = new ArrayList<>();
+        int taken = 0, i = 0;
+        
+        while (taken < numToDestroy && i < cands.size()) {
+            // CORRECCIÓN: 10% probabilidad de saltar para diversidad
+            if (random.nextDouble() < 0.10 && i + 1 < cands.size()) {
+                i++;
+            }
+            
+            Package sel = cands.get(i).pkg;
+            ArrayList<Flight> route = currentSolution.get(sel);
+            if (route == null) route = new ArrayList<>(); // Protección contra nulos
+            
+            destroyed.add(new java.util.AbstractMap.SimpleEntry<>(sel, new ArrayList<>(route)));
+            partialSolution.remove(sel);
+            taken++; 
+            i++;
+        }
+        
+        return new DestructionResult(partialSolution, destroyed);
     }
     
     /**
@@ -168,30 +214,67 @@ public class ALNSDestruction {
         
         ArrayList<Map.Entry<Package, ArrayList<Flight>>> destroyedPackages = new ArrayList<>();
         
-        // Priorizar paquetes intercontinentales y con mayor margen de tiempo
-        candidatePackages.sort((p1, p2) -> {
-            // Primero: intercontinental vs continental
-            boolean p1Intercontinental = p1.getCurrentLocation().getContinent() != p1.getDestinationCity().getContinent();
-            boolean p2Intercontinental = p2.getCurrentLocation().getContinent() != p2.getDestinationCity().getContinent();
+        // REFINAMIENTO: Precomputar slack y productos para evitar recalcular en comparator
+        class CandidateInfo {
+            Package pkg;
+            boolean intercontinental;
+            double slack;
+            int products;
+            boolean atDestination;
+        }
+        
+        ArrayList<CandidateInfo> candidates = new ArrayList<>();
+        for (Package pkg : candidatePackages) {
+            CandidateInfo info = new CandidateInfo();
+            info.pkg = pkg;
+            info.intercontinental = pkg.getCurrentLocation().getContinent() != pkg.getDestinationCity().getContinent();
             
-            if (p1Intercontinental != p2Intercontinental) {
-                return Boolean.compare(p2Intercontinental, p1Intercontinental);
+            ArrayList<Flight> route = currentSolution.get(pkg);
+            info.slack = slackHours(pkg, route);
+            info.products = productsOf(pkg);
+            info.atDestination = isAlreadyAtDestination(route);
+            
+            candidates.add(info);
+        }
+        
+        // Priorizar: 1) intercontinental, 2) NO en destino, 3) mayor slack, 4) más productos
+        candidates.sort((c1, c2) -> {
+            // Primero: intercontinental vs continental
+            if (c1.intercontinental != c2.intercontinental) {
+                return Boolean.compare(c2.intercontinental, c1.intercontinental);
             }
             
-            // Segundo: mayor margen de tiempo
-            LocalDateTime now = LocalDateTime.now();
-            long p1Margin = ChronoUnit.HOURS.between(now, p1.getDeliveryDeadline());
-            long p2Margin = ChronoUnit.HOURS.between(now, p2.getDeliveryDeadline());
-            return Long.compare(p2Margin, p1Margin);
+            // REFINAMIENTO: Segundo: evitar paquetes ya en destino
+            if (c1.atDestination != c2.atDestination) {
+                return Boolean.compare(c1.atDestination, c2.atDestination);
+            }
+            
+            // Tercero: mayor slack
+            int slackComparison = Double.compare(c2.slack, c1.slack);
+            if (slackComparison != 0) {
+                return slackComparison;
+            }
+            
+            // REFINAMIENTO: Cuarto: tie-break por más productos (liberar más capacidad)
+            return Integer.compare(c2.products, c1.products);
         });
+        
+        // Extraer los packages ordenados
+        candidatePackages.clear();
+        for (CandidateInfo info : candidates) {
+            candidatePackages.add(info.pkg);
+        }
         
         // Seleccionar paquetes con sesgo hacia los intercontinentales
         for (int i = 0; i < numToDestroy; i++) {
             Package selectedPackage = candidatePackages.get(i);
+            // REFINAMIENTO: Consistencia - usar siempre currentSolution como fuente
+            ArrayList<Flight> route = currentSolution.get(selectedPackage);
+            if (route == null) route = new ArrayList<>(); // Protección contra nulos
             
-            destroyedPackages.add(Map.entry(
+            destroyedPackages.add(new java.util.AbstractMap.SimpleEntry<>(
                 selectedPackage, 
-                new ArrayList<>(partialSolution.get(selectedPackage))
+                new ArrayList<>(route)
             ));
             
             partialSolution.remove(selectedPackage);
@@ -219,44 +302,69 @@ public class ALNSDestruction {
             return new DestructionResult(partialSolution, new ArrayList<>());
         }
         
-        // Agrupar paquetes por rango de deadline
-        LocalDateTime now = LocalDateTime.now();
-        ArrayList<Package> shortTermPackages = new ArrayList<>(); // <= 24 horas
-        ArrayList<Package> mediumTermPackages = new ArrayList<>(); // 24-96 horas
-        ArrayList<Package> longTermPackages = new ArrayList<>(); // > 96 horas
+        // CORRECCIÓN: Agrupar por slack real, no por "horas a deadline"
+        ArrayList<Package> lowSlack = new ArrayList<>();    // slack ≤ 8 h (no tocar si es posible)
+        ArrayList<Package> midSlack = new ArrayList<>();    // 8–32 h
+        ArrayList<Package> highSlack = new ArrayList<>();   // > 32 h
+        ArrayList<Package> atDestination = new ArrayList<>(); // REFINAMIENTO: Separar paquetes ya en destino
         
-        for (Package pkg : currentSolution.keySet()) {
-            long hoursUntilDeadline = ChronoUnit.HOURS.between(now, pkg.getDeliveryDeadline());
+        for (Map.Entry<Package, ArrayList<Flight>> e : currentSolution.entrySet()) {
+            Package pkg = e.getKey();
+            ArrayList<Flight> route = e.getValue();
             
-            if (hoursUntilDeadline <= 24) {
-                shortTermPackages.add(pkg);
-            } else if (hoursUntilDeadline <= 96) {
-                mediumTermPackages.add(pkg);
+            // REFINAMIENTO: Separar paquetes ya en destino (fallback only)
+            if (isAlreadyAtDestination(route)) {
+                atDestination.add(pkg);
+                continue;
+            }
+            
+            double s = slackHours(pkg, route);
+            if (s <= 8) {
+                lowSlack.add(pkg);
+            } else if (s <= 32) {
+                midSlack.add(pkg);
             } else {
-                longTermPackages.add(pkg);
+                highSlack.add(pkg);
             }
         }
         
-        // Seleccionar grupo con más paquetes (excluyendo short-term para preservar entregas urgentes)
+        // REFINAMIENTO: Elige grupo prioritariamente, usando atDestination como último recurso
         ArrayList<Package> selectedGroup;
         String groupName;
         
-        if (longTermPackages.size() >= mediumTermPackages.size() && !longTermPackages.isEmpty()) {
-            selectedGroup = longTermPackages;
-            groupName = "largo plazo";
-        } else if (!mediumTermPackages.isEmpty()) {
-            selectedGroup = mediumTermPackages;
-            groupName = "mediano plazo";
-        } else if (!shortTermPackages.isEmpty()) {
-            // Solo usar short-term como último recurso
-            selectedGroup = shortTermPackages;
-            groupName = "corto plazo";
+        if (!highSlack.isEmpty()) {
+            selectedGroup = highSlack;
+            groupName = "alto slack";
+        } else if (!midSlack.isEmpty()) {
+            selectedGroup = midSlack;
+            groupName = "slack medio";
+        } else if (!lowSlack.isEmpty()) {
+            selectedGroup = lowSlack;
+            groupName = "bajo slack";
         } else {
-            return new DestructionResult(partialSolution, new ArrayList<>());
+            selectedGroup = atDestination;
+            groupName = "ya en destino (fallback)";
         }
         
         if (selectedGroup.size() < minDestroy) {
             return randomDestroy(currentSolution, destructionRate, minDestroy, maxDestroy);
+        }
+        
+        // REFINAMIENTO: Ordenar por productos desc para tie-break (más productos = más capacidad liberada)
+        if (selectedGroup != atDestination) { // Solo si no son paquetes en destino
+            selectedGroup.sort((p1, p2) -> {
+                int p1Products = productsOf(p1);
+                int p2Products = productsOf(p2);
+                return Integer.compare(p2Products, p1Products); // Más productos primero
+            });
+        }
+        
+        // Barajar parcialmente para diversidad (mantener bias hacia más productos en el top)
+        if (selectedGroup.size() > 10) {
+            // Solo barajar los últimos elementos, mantener los primeros (más productos) intactos
+            Collections.shuffle(selectedGroup.subList(5, selectedGroup.size()), random);
+        } else {
+            Collections.shuffle(selectedGroup, random);
         }
         
         int numToDestroy = Math.min(
@@ -264,32 +372,24 @@ public class ALNSDestruction {
             Math.min(maxDestroy, selectedGroup.size())
         );
         
-        ArrayList<Map.Entry<Package, ArrayList<Flight>>> destroyedPackages = new ArrayList<>();
-        
-        // Barajar para selección aleatoria dentro del grupo
-        Collections.shuffle(selectedGroup, random);
-        
+        ArrayList<Map.Entry<Package, ArrayList<Flight>>> destroyed = new ArrayList<>();
         for (int i = 0; i < numToDestroy; i++) {
-            Package selectedPackage = selectedGroup.get(i);
+            Package sel = selectedGroup.get(i);
+            ArrayList<Flight> route = currentSolution.get(sel);
+            if (route == null) route = new ArrayList<>(); // Protección contra nulos
             
-            destroyedPackages.add(Map.entry(
-                selectedPackage, 
-                new ArrayList<>(partialSolution.get(selectedPackage))
-            ));
-            
-            partialSolution.remove(selectedPackage);
+            destroyed.add(new java.util.AbstractMap.SimpleEntry<>(sel, new ArrayList<>(route)));
+            partialSolution.remove(sel);
         }
         
-        System.out.println("Destrucción temporal: " + numToDestroy + 
-                          " paquetes eliminados del grupo " + groupName);
+        System.out.println("Destrucción temporal por slack: " + numToDestroy + " paquetes del grupo " + groupName);
         
-        return new DestructionResult(partialSolution, destroyedPackages);
+        return new DestructionResult(partialSolution, destroyed);
     }
     
     /**
-     * Destrucción de rutas congestionadas: elimina paquetes que usan vuelos 
-     * con alta utilización de capacidad.
-     * OPTIMIZADO: Evita cálculos costosos y bucles innecesarios.
+     * CORRECCIÓN COMPLETA: Destrucción de rutas congestionadas con scoring por
+     * vuelo crítico + productos - urgencia
      */
     public DestructionResult congestedRouteDestroy(
             HashMap<Package, ArrayList<Flight>> currentSolution,
@@ -297,97 +397,82 @@ public class ALNSDestruction {
             int minDestroy,
             int maxDestroy) {
         
-        System.out.println("      Iniciando congestedRouteDestroy...");
-        HashMap<Package, ArrayList<Flight>> partialSolution = new HashMap<>(currentSolution);
-        
+        HashMap<Package, ArrayList<Flight>> partial = new HashMap<>(currentSolution);
         if (currentSolution.isEmpty()) {
-            System.out.println("      Solución vacía, retornando...");
-            return new DestructionResult(partialSolution, new ArrayList<>());
+            return new DestructionResult(partial, new ArrayList<>());
         }
         
-        // OPTIMIZACIÓN: Calcular tiempo una sola vez fuera del sort
-        System.out.println("      Calculando tiempo...");
-        LocalDateTime now = LocalDateTime.now();
+        // CORRECCIÓN: Parámetros de scoring mejorados
+        final double UTIL_THRESHOLD = 0.85;   // umbral de "crítico"
+        final double W_UTIL = 1.0;            // peso de congestión
+        final double W_PRODS = 0.25;          // peso por productos
+        final double W_SLACK_PENALTY = 0.5;   // penaliza baja holgura
         
-        // OPTIMIZACIÓN: Versión simplificada para debugging
-        System.out.println("      Analizando " + currentSolution.size() + " paquetes...");
-        ArrayList<Package> congestedPackages = new ArrayList<>();
+        // CORRECCIÓN: Score por paquete basado en congestión crítica + productos - urgencia
+        class Cand { 
+            Package pkg; 
+            ArrayList<Flight> route; 
+            double score; 
+        }
         
-        // SIMPLIFICACIÓN: Solo tomar los primeros 10 paquetes para evitar bucles largos
-        int maxPackagesToAnalyze = Math.min(currentSolution.size(), 10);
-        int count = 0;
+        ArrayList<Cand> cands = new ArrayList<>();
         
-        for (Map.Entry<Package, ArrayList<Flight>> entry : currentSolution.entrySet()) {
-            if (count >= maxPackagesToAnalyze) break;
+        for (Map.Entry<Package, ArrayList<Flight>> e : currentSolution.entrySet()) {
+            Package p = e.getKey();
+            ArrayList<Flight> r = e.getValue();
+            if (r == null || r.isEmpty()) continue;
             
-            Package pkg = entry.getKey();
-            ArrayList<Flight> route = entry.getValue();
+            int prods = productsOf(p);
             
-            if (route.isEmpty()) continue; // OPTIMIZACIÓN: Evitar división por cero
-            
-            // SIMPLIFICACIÓN: Solo verificar si hay al menos un vuelo con alta utilización
-            boolean isCongested = false;
-            for (Flight flight : route) {
-                double utilization = (double) flight.getUsedCapacity() / flight.getMaxCapacity();
-                if (utilization > 0.7) {
-                    isCongested = true;
-                    break; // OPTIMIZACIÓN: Salir del bucle interno tan pronto como encontremos uno
+            // CORRECCIÓN: Congestión acumulada en vuelos por encima del umbral
+            double cong = 0.0;
+            for (Flight f : r) {
+                double util = (f.getMaxCapacity() > 0) ? 
+                    ((double) f.getUsedCapacity() / f.getMaxCapacity()) : 0.0;
+                if (util > UTIL_THRESHOLD) {
+                    cong += (util - UTIL_THRESHOLD);
                 }
             }
             
-            if (isCongested) {
-                congestedPackages.add(pkg);
-            }
+            // CORRECCIÓN: Penalizar quitar paquetes con poca holgura
+            double slack = slackHours(p, r);
+            double slackPenalty = (slack <= 8) ? (8 - Math.max(slack, 0)) : 0.0;
             
-            count++;
+            double score = W_UTIL * cong + W_PRODS * prods - W_SLACK_PENALTY * slackPenalty;
+            if (score > 0) {
+                Cand c = new Cand();
+                c.pkg = p;
+                c.route = r;
+                c.score = score;
+                cands.add(c);
+            }
         }
         
-        System.out.println("      Paquetes congestionados encontrados: " + congestedPackages.size());
-        
-        // OPTIMIZACIÓN: Si no hay suficientes paquetes congestionados, usar random destroy
-        if (congestedPackages.size() < minDestroy) {
-            System.out.println("      Pocos paquetes congestionados, usando random destroy...");
+        if (cands.size() < minDestroy) {
             return randomDestroy(currentSolution, destructionRate, minDestroy, maxDestroy);
         }
         
-        // OPTIMIZACIÓN: Ordenar usando tiempo pre-calculado y límite de paquetes
-        System.out.println("      Ordenando paquetes...");
-        int maxPackagesToSort = Math.min(congestedPackages.size(), 100); // Limitar sorting a 100 paquetes
-        congestedPackages.sort((p1, p2) -> {
-            // OPTIMIZACIÓN: Usar tiempo ya calculado
-            long p1Margin = ChronoUnit.HOURS.between(now, p1.getDeliveryDeadline());
-            long p2Margin = ChronoUnit.HOURS.between(now, p2.getDeliveryDeadline());
-            return Long.compare(p2Margin, p1Margin);
-        });
-        System.out.println("      Ordenamiento completado");
-        
-        // OPTIMIZACIÓN: Limitar el número de paquetes a procesar
-        if (congestedPackages.size() > maxPackagesToSort) {
-            congestedPackages = new ArrayList<>(congestedPackages.subList(0, maxPackagesToSort));
-        }
+        // CORRECCIÓN: Ordenar por score desc (más alivio esperado primero)
+        cands.sort((a, b) -> Double.compare(b.score, a.score));
         
         int numToDestroy = Math.min(
-            Math.max((int)(congestedPackages.size() * destructionRate), minDestroy),
-            Math.min(maxDestroy, congestedPackages.size())
+            Math.max((int)(cands.size() * destructionRate), minDestroy),
+            Math.min(maxDestroy, cands.size())
         );
         
-        ArrayList<Map.Entry<Package, ArrayList<Flight>>> destroyedPackages = new ArrayList<>();
-        
+        ArrayList<Map.Entry<Package, ArrayList<Flight>>> destroyed = new ArrayList<>();
         for (int i = 0; i < numToDestroy; i++) {
-            Package selectedPackage = congestedPackages.get(i);
+            Package sel = cands.get(i).pkg;
+            // REFINAMIENTO: Consistencia - usar currentSolution como fuente
+            ArrayList<Flight> route = currentSolution.get(sel);
+            if (route == null) route = new ArrayList<>(); // Protección contra nulos
             
-            destroyedPackages.add(Map.entry(
-                selectedPackage, 
-                new ArrayList<>(partialSolution.get(selectedPackage))
-            ));
-            
-            partialSolution.remove(selectedPackage);
+            destroyed.add(new java.util.AbstractMap.SimpleEntry<>(sel, new ArrayList<>(route)));
+            partial.remove(sel);
         }
         
-        System.out.println("Destrucción por congestión: " + numToDestroy + 
-                          " paquetes eliminados de rutas congestionadas");
-        
-        return new DestructionResult(partialSolution, destroyedPackages);
+        System.out.println("Destrucción por congestión (mejorada): " + numToDestroy + " paquetes");
+        return new DestructionResult(partial, destroyed);
     }
     
     /**

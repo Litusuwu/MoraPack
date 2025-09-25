@@ -11,6 +11,10 @@ public class Constants {
     public static final int LOWERBOUND_SOLUTION_SPACE = 100;
     public static final int UPPERBOUND_SOLUTION_SPACE = 200;
     
+    public static final double DESTRUCTION_RATIO = 0.8;
+    public static final int DESTRUCTION_MIN_PACKAGES = 5000;
+    public static final int DESTRUCTION_MAX_PACKAGES = 5000;
+    
     // Delivery time constants
     public static final double SAME_CONTINENT_MAX_DELIVERY_TIME = 2.0;
     public static final double DIFFERENT_CONTINENT_MAX_DELIVERY_TIME = 3.0;
@@ -27,6 +31,10 @@ public class Constants {
     public static final int WAREHOUSE_MAX_CAPACITY = 1000;
     
     public static final int CUSTOMER_PICKUP_MAX_HOURS = 2;
+    
+    // NEW: Control de tipo de solución inicial
+    public static final boolean USE_GREEDY_INITIAL_SOLUTION = false; // true=greedy, false=random
+    public static final double RANDOM_ASSIGNMENT_PROBABILITY = 0.3; // Para solución random: 30% de asignación
 
     public static final String LIMA_WAREHOUSE = "Lima, Peru";
     public static final String BRUSSELS_WAREHOUSE = "Brussels, Belgium";
