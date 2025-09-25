@@ -1,6 +1,6 @@
 package com.system.morapack;
 
-import com.system.morapack.schemas.algorithm.Solution;
+import com.system.morapack.schemas.algorithm.ALNS.Solution;
 
 public class Main {
     public static void main(String[] args) {

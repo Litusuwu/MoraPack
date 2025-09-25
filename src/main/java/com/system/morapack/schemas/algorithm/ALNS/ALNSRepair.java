@@ -1,4 +1,4 @@
-package com.system.morapack.schemas.algorithm;
+package com.system.morapack.schemas.algorithm.ALNS;
 
 import com.system.morapack.schemas.Flight;
 import com.system.morapack.schemas.Package;

@@ -1,4 +1,4 @@
-package com.system.morapack.schemas.algorithm;
+package com.system.morapack.schemas.algorithm.ALNS;
 
 import com.system.morapack.schemas.Airport;
 import com.system.morapack.schemas.City;
@@ -6,6 +6,10 @@ import com.system.morapack.schemas.Flight;
 import com.system.morapack.schemas.Package;
 import com.system.morapack.schemas.Product;
 import com.system.morapack.config.Constants;
+import com.system.morapack.schemas.algorithm.Input.InputAirports;
+import com.system.morapack.schemas.algorithm.Input.InputData;
+import com.system.morapack.schemas.algorithm.Input.InputProducts;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;

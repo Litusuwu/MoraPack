@@ -1,4 +1,4 @@
-package com.system.morapack.schemas.algorithm;
+package com.system.morapack.schemas.algorithm.Input;
 
 import com.system.morapack.schemas.Airport;
 import com.system.morapack.schemas.City;
