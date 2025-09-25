@@ -17,7 +17,6 @@ import java.time.temporal.ChronoUnit;
 
 public class Solution {
     private HashMap<HashMap<Package, ArrayList<Flight>>, Integer> solution;
-    private HashMap<ArrayList<HashMap<Package, ArrayList<Flight>>>, Integer> solutionSpace;
     private InputAirports inputAirports;
     private InputData inputData;
     private InputProducts inputProducts;
@@ -52,12 +51,21 @@ public class Solution {
     private double coolingRate;
     private int maxIterations;
     private int segmentSize;
+    
+    // Mecanismos de diversificación e intensificación
+    private int stagnationCounter;
+    private int diversificationThreshold;
+    private boolean diversificationMode;
+    private int lastImprovementIteration;
+    private double diversificationFactor;
+    
+    // Pool de paquetes no asignados para expansión ALNS
+    private ArrayList<Package> unassignedPool;
 
     
     public Solution() {
         this.inputAirports = new InputAirports(Constants.AIRPORT_INFO_FILE_PATH);
         this.solution = new HashMap<>();
-        this.solutionSpace = new HashMap<>();
         this.airports = inputAirports.readAirports();
         this.inputData = new InputData(Constants.FLIGHTS_FILE_PATH, this.airports);
         this.flights = inputData.readFlights();
@@ -118,11 +126,21 @@ public class Solution {
             }
         }
         
-        // Parámetros del algoritmo
-        this.temperature = 1000.0;        // Temperatura inicial
-        this.coolingRate = 0.995;         // Tasa de enfriamiento
-        this.maxIterations = 10;          // Máximo número de iteraciones (para demostración)
-        this.segmentSize = 10;            // Tamaño del segmento para actualizar pesos
+        // Parámetros del algoritmo optimizados para MoraPack
+        this.temperature = 100.0;         // Temperatura inicial más baja
+        this.coolingRate = 0.98;          // Enfriamiento más rápido
+        this.maxIterations = 1000;        // Muchas más iteraciones
+        this.segmentSize = 25;            // Segmentos más pequeños para mejor adaptación
+        
+        // Inicializar mecanismos de diversificación
+        this.stagnationCounter = 0;
+        this.diversificationThreshold = 100; // Cambiar a diversificación después de 100 iteraciones sin mejora
+        this.diversificationMode = false;
+        this.lastImprovementIteration = 0;
+        this.diversificationFactor = 1.0;
+        
+        // Inicializar pool de paquetes no asignados
+        this.unassignedPool = new ArrayList<>();
     }
 
     public void solve() {
@@ -150,6 +168,9 @@ public class Solution {
         // 3. Establecer s_mejor = s_actual
         bestSolution = new HashMap<>(solution);
         
+        // 3.5. Inicializar pool de paquetes no asignados para ALNS
+        initializeUnassignedPool();
+        
         // 4. Ejecutar algoritmo ALNS
         System.out.println("\n=== INICIANDO ALGORITMO ALNS ===");
         runALNSAlgorithm();
@@ -157,6 +178,114 @@ public class Solution {
         // 5. Mostrar resultado final
         System.out.println("\n=== RESULTADO FINAL ALNS ===");
         this.printSolutionDescription(2);
+    }
+    
+    /**
+     * Inicializa el pool de paquetes no asignados para expansión ALNS
+     */
+    private void initializeUnassignedPool() {
+        unassignedPool.clear();
+        
+        // Obtener la solución actual
+        HashMap<Package, ArrayList<Flight>> currentSolution = solution.keySet().iterator().next();
+        
+        // Agregar todos los paquetes no asignados al pool
+        for (Package pkg : packages) {
+            if (!currentSolution.containsKey(pkg)) {
+                unassignedPool.add(pkg);
+            }
+        }
+        
+        if (Constants.VERBOSE_LOGGING) {
+            System.out.println("Pool de no asignados inicializado: " + unassignedPool.size() + " paquetes disponibles para expansión ALNS");
+        }
+    }
+    
+    /**
+     * Expande la lista de paquetes a reparar con algunos del pool no asignado
+     * para permitir que ALNS explore la asignación de nuevos paquetes
+     */
+    private ArrayList<Map.Entry<Package, ArrayList<Flight>>> expandWithUnassignedPackages(
+            ArrayList<Map.Entry<Package, ArrayList<Flight>>> destroyedPackages, int maxToAdd) {
+        
+        if (unassignedPool.isEmpty() || maxToAdd <= 0) {
+            return destroyedPackages;
+        }
+        
+        ArrayList<Map.Entry<Package, ArrayList<Flight>>> expandedList = new ArrayList<>(destroyedPackages);
+        
+        // Determinar probabilidad de expansión según pool no asignado
+        double poolRatio = (double) unassignedPool.size() / packages.size();
+        double expansionProbability;
+        
+        if (poolRatio > 0.5) {
+            // Si >50% no asignados: expansión MUY AGRESIVA
+            expansionProbability = diversificationMode ? 0.9 : 0.7; // 90%/70%
+        } else if (poolRatio > 0.3) {
+            // Si >30% no asignados: expansión AGRESIVA  
+            expansionProbability = diversificationMode ? 0.7 : 0.5; // 70%/50%
+        } else if (poolRatio > 0.1) {
+            // Si >10% no asignados: expansión MODERADA
+            expansionProbability = diversificationMode ? 0.5 : 0.3; // 50%/30%
+        } else {
+            // Si <10% no asignados: expansión CONSERVADORA
+            expansionProbability = diversificationMode ? 0.3 : 0.1; // 30%/10%
+        }
+        
+        if (random.nextDouble() < expansionProbability) {
+            // Ordenar pool no asignado por urgencia (más urgentes primero)
+            ArrayList<Package> sortedUnassigned = new ArrayList<>(unassignedPool);
+            sortedUnassigned.sort((p1, p2) -> {
+                // Ordenar por deadline (más urgente primero)
+                LocalDateTime d1 = p1.getDeliveryDeadline();
+                LocalDateTime d2 = p2.getDeliveryDeadline();
+                if (d1 == null && d2 == null) return 0;
+                if (d1 == null) return 1;
+                if (d2 == null) return -1;
+                return d1.compareTo(d2);
+            });
+            
+            // Determinar cantidad a agregar según pool no asignado
+            int dynamicMaxToAdd;
+            if (poolRatio > 0.5) {
+                dynamicMaxToAdd = Math.min(200, unassignedPool.size()); // Hasta 200 si >50% no asignados
+            } else if (poolRatio > 0.3) {
+                dynamicMaxToAdd = Math.min(100, unassignedPool.size()); // Hasta 100 si >30% no asignados
+            } else {
+                dynamicMaxToAdd = Math.min(50, unassignedPool.size());  // Hasta 50 si pocos no asignados
+            }
+            
+            int toAdd = Math.min(dynamicMaxToAdd, sortedUnassigned.size());
+            
+            for (int i = 0; i < toAdd; i++) {
+                Package pkg = sortedUnassigned.get(i);
+                // Crear entrada con ruta vacía (será determinada por reparación)
+                expandedList.add(new java.util.AbstractMap.SimpleEntry<>(pkg, new ArrayList<>()));
+            }
+            
+            if (Constants.VERBOSE_LOGGING) {
+                System.out.println("Expansión ALNS: Agregando " + toAdd + " paquetes no asignados para exploración" +
+                                 " (Pool: " + unassignedPool.size() + "/" + packages.size() + 
+                                 " = " + String.format("%.1f%%", poolRatio * 100) + 
+                                 ", Prob: " + String.format("%.0f%%", expansionProbability * 100) + ")");
+            }
+        }
+        
+        return expandedList;
+    }
+    
+    /**
+     * Actualiza el pool de paquetes no asignados basado en la solución actual
+     */
+    private void updateUnassignedPool(HashMap<Package, ArrayList<Flight>> currentSolution) {
+        unassignedPool.clear();
+        
+        // Agregar todos los paquetes no asignados al pool
+        for (Package pkg : packages) {
+            if (!currentSolution.containsKey(pkg)) {
+                unassignedPool.add(pkg);
+            }
+        }
     }
     
     /**
@@ -186,13 +315,20 @@ public class Solution {
         
         // Bucle principal ALNS
         for (int iteration = 0; iteration < maxIterations; iteration++) {
-            System.out.println("ALNS Iteración " + iteration + "/" + maxIterations);
+            // Log de iteración solo si es verboso o es múltiplo del intervalo
+            if (Constants.VERBOSE_LOGGING || iteration % Constants.LOG_ITERATION_INTERVAL == 0) {
+                System.out.println("ALNS Iteración " + iteration + "/" + maxIterations);
+            }
             
             // Seleccionar operadores basado en pesos
             int[] selectedOps = selectOperators();
             int destructionOp = selectedOps[0];
             int repairOp = selectedOps[1];
-            System.out.println("  Operadores seleccionados: Destrucción=" + destructionOp + ", Reparación=" + repairOp);
+            
+            // Log de operadores solo en modo verboso
+            if (Constants.VERBOSE_LOGGING) {
+                System.out.println("  Operadores seleccionados: Destrucción=" + destructionOp + ", Reparación=" + repairOp);
+            }
             
             // Crear copia de la solución actual
             HashMap<Package, ArrayList<Flight>> tempSolution = new HashMap<>(currentSolution);
@@ -202,27 +338,41 @@ public class Solution {
             Map<Airport, Integer> warehouseSnapshot = snapshotWarehouses();
             
             // Aplicar operador de destrucción
-            System.out.println("  Aplicando operador de destrucción...");
+            if (Constants.VERBOSE_LOGGING) {
+                System.out.println("  Aplicando operador de destrucción...");
+            }
             long startTime = System.currentTimeMillis();
             ALNSDestruction.DestructionResult destructionResult = applyDestructionOperator(
                 tempSolution, destructionOp);
             long endTime = System.currentTimeMillis();
-            System.out.println("  Operador de destrucción completado en " + (endTime - startTime) + "ms");
+            
+            if (Constants.VERBOSE_LOGGING) {
+                System.out.println("  Operador de destrucción completado en " + (endTime - startTime) + "ms");
+            }
             
             if (destructionResult == null || destructionResult.getDestroyedPackages().isEmpty()) {
-                System.out.println("  No se pudo destruir nada, continuando...");
+                if (Constants.VERBOSE_LOGGING) {
+                    System.out.println("  No se pudo destruir nada, continuando...");
+                }
                 continue; // No se pudo destruir nada
             }
-            System.out.println("  Paquetes destruidos: " + destructionResult.getDestroyedPackages().size());
+            
+            if (Constants.VERBOSE_LOGGING) {
+                System.out.println("  Paquetes destruidos: " + destructionResult.getDestroyedPackages().size());
+            }
             
             // PATCH: Usar solución parcial de destrucción y reconstruir estado
             tempSolution = new HashMap<>(destructionResult.getPartialSolution());
             rebuildCapacitiesFromSolution(tempSolution);
             rebuildWarehousesFromSolution(tempSolution);
             
-            // Aplicar operador de reparación
+            // NUEVO: Expandir con paquetes no asignados para exploración
+            ArrayList<Map.Entry<Package, ArrayList<Flight>>> expandedPackages = 
+                expandWithUnassignedPackages(destructionResult.getDestroyedPackages(), 100);
+            
+            // Aplicar operador de reparación con lista expandida
             ALNSRepair.RepairResult repairResult = applyRepairOperator(
-                tempSolution, repairOp, destructionResult.getDestroyedPackages());
+                tempSolution, repairOp, expandedPackages);
             
             if (repairResult == null || !repairResult.isSuccess()) {
                 // PATCH: Restaurar snapshots si falla la reparación
@@ -242,31 +392,63 @@ public class Solution {
             // Actualizar contador de uso
             operatorUsage[destructionOp][repairOp]++;
             
-            // Criterio de aceptación
+            // Criterio de aceptación mejorado con múltiples niveles de recompensa
             boolean accepted = false;
+            double improvementRatio = 0.0;
+            
             if (tempWeight > currentWeight) {
+                improvementRatio = (double)(tempWeight - currentWeight) / Math.max(currentWeight, 1);
                 currentSolution = tempSolution;
                 currentWeight = tempWeight;
                 accepted = true;
 
                 if (tempWeight > bestWeight) {
+                    // Nueva mejor solución global
                     bestWeight = tempWeight;
                     bestSolution.clear();
                     bestSolution.put(new HashMap<>(currentSolution), currentWeight);
-                    operatorScores[destructionOp][repairOp] += 100;
+                    operatorScores[destructionOp][repairOp] += 300; // Recompensa máxima
                     improvements++;
                     noImprovementCount = 0;
-                    System.out.println("Iteración " + iteration + ": ¡Nueva mejor solución! Peso: " + bestWeight);
-                } else {
+                    lastImprovementIteration = iteration;
+                    stagnationCounter = 0;
+                    diversificationMode = false; // Volver a intensificación después de mejora
+                    updateUnassignedPool(currentSolution); // Actualizar pool de no asignados
+                    // Siempre mostrar mejoras en la mejor solución global
+                    System.out.println("Iteración " + iteration + ": ¡Nueva mejor solución! Peso: " + bestWeight + 
+                                     " (mejora: " + String.format("%.2f%%", improvementRatio * 100) + ")" +
+                                     " | No asignados: " + unassignedPool.size());
+                } else if (improvementRatio > 0.05) {
+                    // Mejora significativa (>5%)
+                    operatorScores[destructionOp][repairOp] += 100;
+                    noImprovementCount = Math.max(0, noImprovementCount - 5);
+                    updateUnassignedPool(currentSolution); // Actualizar pool de no asignados
+                } else if (improvementRatio > 0.01) {
+                    // Mejora moderada (1-5%)
                     operatorScores[destructionOp][repairOp] += 50;
+                    noImprovementCount = Math.max(0, noImprovementCount - 2);
+                    updateUnassignedPool(currentSolution); // Actualizar pool de no asignados
+                } else {
+                    // Mejora pequeña (<1%)
+                    operatorScores[destructionOp][repairOp] += 25;
+                    updateUnassignedPool(currentSolution); // Actualizar pool de no asignados
                 }
             } else {
-                double probability = Math.exp((tempWeight - currentWeight) / temperature);
+                // Simulated Annealing con ajuste por calidad de la solución
+                double delta = tempWeight - currentWeight;
+                double adjustedTemp = temperature * (1.0 + 0.1 * Math.random()); // Pequeña variación
+                double probability = Math.exp(delta / adjustedTemp);
+                
                 if (random.nextDouble() < probability) {
                     currentSolution = tempSolution;
                     currentWeight = tempWeight;
                     accepted = true;
-                    operatorScores[destructionOp][repairOp] += 10;
+                    updateUnassignedPool(currentSolution); // Actualizar pool de no asignados
+                    operatorScores[destructionOp][repairOp] += 15; // Recompensa menor por exploración
+                    noImprovementCount++;
+                } else {
+                    operatorScores[destructionOp][repairOp] += 5; // Recompensa mínima por intentar
+                    noImprovementCount++;
                 }
             }
             
@@ -278,15 +460,43 @@ public class Solution {
             }
             // NOTA: Si se acepta, tempSolution ya tiene el estado correcto reconstruido
             
+            // Manejar diversificación vs intensificación
+            stagnationCounter = iteration - lastImprovementIteration;
+            if (stagnationCounter > diversificationThreshold && !diversificationMode) {
+                diversificationMode = true;
+                diversificationFactor = 1.5; // Aumentar destrucción
+                temperature *= 2.0; // Aumentar temperatura para más exploración
+                if (Constants.VERBOSE_LOGGING) {
+                    System.out.println("Iteración " + iteration + ": Activando modo DIVERSIFICACIÓN");
+                }
+            } else if (diversificationMode && stagnationCounter <= diversificationThreshold / 2) {
+                diversificationMode = false;
+                diversificationFactor = 1.0; // Destrucción normal
+                if (Constants.VERBOSE_LOGGING) {
+                    System.out.println("Iteración " + iteration + ": Volviendo a modo INTENSIFICACIÓN");
+                }
+            }
+            
             // Actualizar pesos cada segmentSize iteraciones
             if ((iteration + 1) % segmentSize == 0) {
                 updateOperatorWeights();
                 temperature *= coolingRate;
+                
+                // Reportar estado
+                if (iteration % 100 == 0) {
+                    System.out.println("Iteración " + iteration + 
+                                     " | Mejor peso: " + bestWeight + 
+                                     " | Temperatura: " + String.format("%.2f", temperature) +
+                                     " | Modo: " + (diversificationMode ? "DIVERSIFICACIÓN" : "INTENSIFICACIÓN"));
+                }
             }
             
-            // Parada temprana si no hay mejoras
-            if (noImprovementCount > 50) {
-                System.out.println("Parada temprana en iteración " + iteration + " (sin mejoras)");
+            // Parada temprana inteligente
+            if (stagnationCounter > 300) { // Más iteraciones antes de parar
+                if (Constants.VERBOSE_LOGGING) {
+                    System.out.println("Parada temprana en iteración " + iteration + 
+                                     " (sin mejoras por " + stagnationCounter + " iteraciones)");
+                }
                 break;
             }
         }
@@ -295,10 +505,13 @@ public class Solution {
         solution.clear();
         solution.putAll(bestSolution);
         
+        // Siempre mostrar resumen final
         System.out.println("ALNS completado:");
         System.out.println("  Mejoras encontradas: " + improvements);
         System.out.println("  Peso final: " + bestWeight);
-        System.out.println("  Temperatura final: " + temperature);
+        if (Constants.VERBOSE_LOGGING) {
+            System.out.println("  Temperatura final: " + temperature);
+        }
     }
     
     /**
@@ -306,7 +519,10 @@ public class Solution {
      */
     private int[] selectOperators() {
         try {
-            System.out.println("    Seleccionando operadores...");
+            if (Constants.VERBOSE_LOGGING) {
+                System.out.println("    Seleccionando operadores...");
+            }
+            
             // Selección por ruleta basada en pesos
             double totalWeight = 0.0;
             for (int i = 0; i < operatorWeights.length; i++) {
@@ -315,7 +531,9 @@ public class Solution {
                 }
             }
             
-            System.out.println("    Peso total: " + totalWeight);
+            if (Constants.VERBOSE_LOGGING) {
+                System.out.println("    Peso total: " + totalWeight);
+            }
             double randomValue = random.nextDouble() * totalWeight;
             double cumulativeWeight = 0.0;
             
@@ -323,16 +541,21 @@ public class Solution {
                 for (int j = 0; j < operatorWeights[i].length; j++) {
                     cumulativeWeight += operatorWeights[i][j];
                     if (randomValue <= cumulativeWeight) {
-                        System.out.println("    Operadores seleccionados: " + i + ", " + j);
+                        if (Constants.VERBOSE_LOGGING) {
+                            System.out.println("    Operadores seleccionados: " + i + ", " + j);
+                        }
                         return new int[]{i, j};
                     }
                 }
             }
             
             // Fallback: seleccionar el primero
-            System.out.println("    Usando fallback: 0, 0");
+            if (Constants.VERBOSE_LOGGING) {
+                System.out.println("    Usando fallback: 0, 0");
+            }
             return new int[]{0, 0};
         } catch (Exception e) {
+            // Siempre mostrar errores críticos
             System.out.println("    Error en selección de operadores: " + e.getMessage());
             e.printStackTrace();
             return new int[]{0, 0};
@@ -345,24 +568,40 @@ public class Solution {
     private ALNSDestruction.DestructionResult applyDestructionOperator(
             HashMap<Package, ArrayList<Flight>> solution, int operatorIndex) {
         try {
+            // Ajustar ratio de destrucción según modo de diversificación
+            double adjustedRatio = Constants.DESTRUCTION_RATIO * diversificationFactor;
+            int adjustedMin = (int)(Constants.DESTRUCTION_MIN_PACKAGES * diversificationFactor);
+            int adjustedMax = (int)(Constants.DESTRUCTION_MAX_PACKAGES * diversificationFactor);
+            
             switch (operatorIndex) {
                 case 0: // Random Destroy
-                    System.out.println("    Ejecutando randomDestroy...");
-                    return destructionOperators.randomDestroy(solution, Constants.DESTRUCTION_RATIO, Constants.DESTRUCTION_MIN_PACKAGES, Constants.DESTRUCTION_MAX_PACKAGES);
+                    if (Constants.VERBOSE_LOGGING) {
+                        System.out.println("    Ejecutando randomDestroy... (ratio: " + String.format("%.2f", adjustedRatio) + ")");
+                    }
+                    return destructionOperators.randomDestroy(solution, adjustedRatio, adjustedMin, adjustedMax);
                 case 1: // Geographic Destroy
-                    System.out.println("    Ejecutando geographicDestroy...");
-                    return destructionOperators.geographicDestroy(solution, Constants.DESTRUCTION_RATIO, Constants.DESTRUCTION_MIN_PACKAGES, Constants.DESTRUCTION_MAX_PACKAGES);
+                    if (Constants.VERBOSE_LOGGING) {
+                        System.out.println("    Ejecutando geographicDestroy... (ratio: " + String.format("%.2f", adjustedRatio) + ")");
+                    }
+                    return destructionOperators.geographicDestroy(solution, adjustedRatio, adjustedMin, adjustedMax);
                 case 2: // Time Based Destroy
-                    System.out.println("    Ejecutando timeBasedDestroy...");
-                    return destructionOperators.timeBasedDestroy(solution, Constants.DESTRUCTION_RATIO, Constants.DESTRUCTION_MIN_PACKAGES, Constants.DESTRUCTION_MAX_PACKAGES);
+                    if (Constants.VERBOSE_LOGGING) {
+                        System.out.println("    Ejecutando timeBasedDestroy... (ratio: " + String.format("%.2f", adjustedRatio) + ")");
+                    }
+                    return destructionOperators.timeBasedDestroy(solution, adjustedRatio, adjustedMin, adjustedMax);
                 case 3: // Congested Route Destroy - OPTIMIZADO
-                    System.out.println("    Ejecutando congestedRouteDestroy (optimizado)...");
-                    return destructionOperators.congestedRouteDestroy(solution, Constants.DESTRUCTION_RATIO, Constants.DESTRUCTION_MIN_PACKAGES, Constants.DESTRUCTION_MAX_PACKAGES);
+                    if (Constants.VERBOSE_LOGGING) {
+                        System.out.println("    Ejecutando congestedRouteDestroy... (ratio: " + String.format("%.2f", adjustedRatio) + ")");
+                    }
+                    return destructionOperators.congestedRouteDestroy(solution, adjustedRatio, adjustedMin, adjustedMax);
                 default:
-                    System.out.println("    Ejecutando randomDestroy (default)...");
-                    return destructionOperators.randomDestroy(solution, Constants.DESTRUCTION_RATIO, Constants.DESTRUCTION_MIN_PACKAGES, Constants.DESTRUCTION_MAX_PACKAGES);
+                    if (Constants.VERBOSE_LOGGING) {
+                        System.out.println("    Ejecutando randomDestroy (default)... (ratio: " + String.format("%.2f", adjustedRatio) + ")");
+                    }
+                    return destructionOperators.randomDestroy(solution, adjustedRatio, adjustedMin, adjustedMax);
             }
         } catch (Exception e) {
+            // Siempre mostrar errores críticos
             System.out.println("    Error en operador de destrucción: " + e.getMessage());
             e.printStackTrace();
             return null;
@@ -635,29 +874,7 @@ public class Solution {
     }
     
     /**
-     * PATCH: Implementar findBestRouteWithTimeWindows (método crítico faltante)
-     */
-    private ArrayList<Flight> findBestRouteWithTimeWindows(Package pkg, HashMap<Package, ArrayList<Flight>> currentSolution) {
-        // Implementación simplificada: buscar vuelos directos principalmente
-        City origin = pkg.getCurrentLocation();
-        City destination = pkg.getDestinationCity();
-        
-        if (origin == null || destination == null) return null;
-        
-        // Buscar vuelo directo
-        ArrayList<Flight> directRoute = findDirectRoute(origin, destination);
-        if (directRoute != null && !directRoute.isEmpty()) {
-            int productCount = pkg.getProducts() != null ? pkg.getProducts().size() : 1;
-            if (fitsCapacity(directRoute, productCount)) {
-                return directRoute;
-            }
-        }
-        
-        return null; // Por simplicidad, solo vuelos directos por ahora
-    }
-    
-    /**
-     * PATCH: Implementar findDirectRoute (método crítico faltante)
+     * PATCH: Implementar findDirectRoute (método crítico)
      */
     private ArrayList<Flight> findDirectRoute(City origin, City destination) {
         Airport originAirport = getAirportByCity(origin);
@@ -668,7 +885,8 @@ public class Solution {
         // Buscar vuelo directo entre aeropuertos
         for (Flight flight : flights) {
             if (flight.getOriginAirport().equals(originAirport) && 
-                flight.getDestinationAirport().equals(destAirport)) {
+                flight.getDestinationAirport().equals(destAirport) &&
+                flight.getUsedCapacity() < flight.getMaxCapacity()) {
                 ArrayList<Flight> route = new ArrayList<>();
                 route.add(flight);
                 return route;
@@ -679,29 +897,41 @@ public class Solution {
     }
     
     /**
-     * PATCH: Implementar isRouteValid (método crítico faltante)
+     * PATCH: Implementar isRouteValid (método crítico)
      */
     private boolean isRouteValid(Package pkg, ArrayList<Flight> route) {
-        if (route == null || route.isEmpty()) return false;
-        if (pkg == null) return false;
+        if (pkg == null || route == null || route.isEmpty()) return false;
         
-        int productCount = pkg.getProducts() != null ? pkg.getProducts().size() : 1;
+        // Cantidad de productos (qty)
+        int qty = (pkg.getProducts() != null && !pkg.getProducts().isEmpty()) ? pkg.getProducts().size() : 1;
         
-        // Validar capacidad de todos los vuelos en la ruta
-        if (!fitsCapacity(route, productCount)) {
+        // 1) Validar capacidad de todos los vuelos en la ruta para qty
+        if (!fitsCapacity(route, qty)) return false;
+        
+        // 2) Origen correcto
+        Airport expectedOrigin = getAirportByCity(pkg.getCurrentLocation());
+        if (expectedOrigin == null || !route.get(0).getOriginAirport().equals(expectedOrigin)) return false;
+        
+        // 3) Continuidad de la ruta
+        for (int i = 0; i < route.size() - 1; i++) {
+            if (!route.get(i).getDestinationAirport().equals(route.get(i + 1).getOriginAirport())) {
+                return false;
+            }
+        }
+        
+        // 4) Destino correcto y deadline respetado
+        Airport expectedDestination = getAirportByCity(pkg.getDestinationCity());
+        if (expectedDestination == null || 
+            !route.get(route.size() - 1).getDestinationAirport().equals(expectedDestination)) {
             return false;
         }
         
-        // Validar que el primer vuelo salga del origen correcto
-        if (!route.get(0).getOriginAirport().equals(getAirportByCity(pkg.getCurrentLocation()))) {
-            return false;
-        }
-        
-        return true;
+        // 5) Deadline respetado
+        return isDeadlineRespected(pkg, route);
     }
     
     /**
-     * PATCH: Implementar canAssignWithSpaceOptimization (método crítico faltante)
+     * PATCH: Implementar canAssignWithSpaceOptimization (método crítico)
      */
     private boolean canAssignWithSpaceOptimization(Package pkg, ArrayList<Flight> route,
                                                  HashMap<Package, ArrayList<Flight>> currentSolution) {
@@ -717,7 +947,7 @@ public class Solution {
     }
     
     /**
-     * PATCH: Implementar updateFlightCapacities (método crítico faltante)
+     * PATCH: Implementar updateFlightCapacities (método crítico)
      */
     private void updateFlightCapacities(ArrayList<Flight> route, int productCount) {
         for (Flight flight : route) {
@@ -726,7 +956,7 @@ public class Solution {
     }
     
     /**
-     * PATCH: Implementar incrementWarehouseOccupancy (método crítico faltante)
+     * PATCH: Implementar incrementWarehouseOccupancy (método crítico)
      */
     private void incrementWarehouseOccupancy(Airport airport, int productCount) {
         int currentOccupancy = warehouseOccupancy.getOrDefault(airport, 0);
@@ -751,11 +981,27 @@ public class Solution {
     }
     
     /**
+     * PATCH: Implementar findBestRouteWithTimeWindows (método crítico)
+     */
+    private ArrayList<Flight> findBestRouteWithTimeWindows(Package pkg, HashMap<Package, ArrayList<Flight>> currentSolution) {
+        // Primero intentar con el método original
+        ArrayList<Flight> originalRoute = findBestRoute(pkg);
+        
+        // Si no funciona, intentar con diferentes horarios de salida
+        if (originalRoute == null || !canAssignWithSpaceOptimization(pkg, originalRoute, currentSolution)) {
+            return findRouteWithDelayedDeparture(pkg, currentSolution);
+        }
+        
+        return originalRoute;
+    }
+    
+    /**
      * CHANGED: calculateRouteTimeMargin unificado sin doble conteo
      * Solo transportTime + 2h conexiones, margen vs orderDate-deadline
      */
     private double calculateRouteTimeMargin(Package pkg, ArrayList<Flight> route) {
-        if (pkg == null || route == null) return 0.0;
+        if (pkg == null || route == null) return 1.0;
+        if (pkg.getOrderDate() == null || pkg.getDeliveryDeadline() == null) return 1.0;
         
         // Tiempo total de la ruta
         double totalTime = 0.0;
@@ -1008,21 +1254,6 @@ public class Solution {
         return assignedPackages;
     }
     
-    /**
-     * Encuentra la mejor ruta considerando ventanas de tiempo y liberación de espacio
-     */
-    private ArrayList<Flight> findBestRouteWithTimeWindows(Package pkg, 
-                                                          HashMap<Package, ArrayList<Flight>> currentSolution) {
-        // Primero intentar con el método original
-        ArrayList<Flight> originalRoute = findBestRoute(pkg);
-        
-        // Si no funciona, intentar con diferentes horarios de salida
-        if (originalRoute == null || !canAssignWithSpaceOptimization(pkg, originalRoute, currentSolution)) {
-            return findRouteWithDelayedDeparture(pkg, currentSolution);
-        }
-        
-        return originalRoute;
-    }
     
     /**
      * Encuentra una ruta con horarios de salida retrasados para aprovechar liberación de espacio
@@ -1068,145 +1299,9 @@ public class Solution {
         return delayedPkg;
     }
     
-    /**
-     * Verifica si se puede asignar un paquete considerando la optimización de espacio
-     * y la liberación temporal de almacenes usando validación temporal estricta
-     */
-    private boolean canAssignWithSpaceOptimization(Package pkg, ArrayList<Flight> route,
-                                                  HashMap<Package, ArrayList<Flight>> currentSolution) {
-        // Usar validación temporal pero solo para el paquete actual
-        // No considerar todos los paquetes simultáneamente para evitar ser demasiado restrictivo
-        return validateSinglePackageTemporalFlow(pkg, route);
-    }
     
-    /**
-     * CORRECCIÓN: Validación temporal completa incluyendo TODAS las escalas intermedias
-     * Simula el flujo del paquete sin comprometer la matriz temporal global
-     */
-    private boolean validateSinglePackageTemporalFlow(Package pkg, ArrayList<Flight> route) {
-        if (route == null || route.isEmpty()) {
-            // Paquete ya en destino - solo verificar capacidad final
-            Airport destinationAirport = getAirportByCity(pkg.getDestinationCity());
-            if (destinationAirport == null) return false;
-            
-            int productCount = pkg.getProducts() != null ? pkg.getProducts().size() : 1;
-            int currentOccupancy = warehouseOccupancy.getOrDefault(destinationAirport, 0);
-            int maxCapacity = destinationAirport.getWarehouse().getMaxCapacity();
-            
-            return (currentOccupancy + productCount) <= maxCapacity;
-        }
-        
-        // CORRECCIÓN: Validar TODAS las escalas intermedias usando simulación temporal
-        return canAssignRespectingTemporalFlow(pkg, route);
-    }
     
-    /**
-     * CORRECCIÓN: Simula el flujo temporal del paquete sin comprometer las matrices temporales
-     * Valida que TODAS las escalas intermedias respeten las capacidades de almacenes
-     */
-    private boolean canAssignRespectingTemporalFlow(Package pkg, ArrayList<Flight> route) {
-        int productCount = pkg.getProducts() != null ? pkg.getProducts().size() : 1;
-        int startMinute = getPackageStartTime(pkg);
-        
-        // Crear copias temporales de las matrices de ocupación para simulación
-        Map<Airport, int[]> tempOccupancy = createTemporalSnapshot();
-        
-        // Simular el flujo completo del paquete
-        int currentMinute = startMinute;
-        Airport currentAirport = getAirportByCity(pkg.getCurrentLocation());
-        
-        if (currentAirport == null) return false;
-        
-        // 1. Fase de espera en aeropuerto de origen (2 horas)
-        int waitingTime = Constants.CUSTOMER_PICKUP_MAX_HOURS * 60; // 2 horas en minutos
-        if (!addTemporalOccupancyToSnapshot(tempOccupancy, currentAirport, currentMinute, waitingTime, productCount)) {
-            return false; // Violación en origen
-        }
-        currentMinute += waitingTime;
-        
-        // 2. Simular cada vuelo y escala intermedia
-        for (int i = 0; i < route.size(); i++) {
-            Flight flight = route.get(i);
-            
-            // Verificar capacidad del vuelo
-            if (flight.getUsedCapacity() + productCount > flight.getMaxCapacity()) {
-                return false; // Vuelo sin capacidad
-            }
-            
-            // Tiempo de vuelo (productos NO ocupan almacenes mientras vuelan)
-            int flightDuration = (int) (flight.getTransportTime() * 60); // Convertir horas a minutos
-            currentMinute += flightDuration;
-            
-            // Llegada al aeropuerto destino/intermedio
-            Airport arrivalAirport = flight.getDestinationAirport();
-            
-            if (i < route.size() - 1) {
-                // CORRECCIÓN: Escala intermedia - validar capacidad de almacén
-                int connectionTime = Constants.CUSTOMER_PICKUP_MAX_HOURS * 60; // 2 horas conexión
-                if (!addTemporalOccupancyToSnapshot(tempOccupancy, arrivalAirport, currentMinute, connectionTime, productCount)) {
-                    return false; // Violación en escala intermedia
-                }
-                currentMinute += connectionTime;
-            } else {
-                // Destino final - productos esperan pickup por 2 horas
-                int pickupTime = Constants.CUSTOMER_PICKUP_MAX_HOURS * 60;
-                if (!addTemporalOccupancyToSnapshot(tempOccupancy, arrivalAirport, currentMinute, pickupTime, productCount)) {
-                    return false; // Violación en destino final
-                }
-            }
-            
-            currentAirport = arrivalAirport;
-        }
-        
-        return true; // Todas las escalas respetan capacidades
-    }
     
-    /**
-     * CORRECCIÓN: Crear snapshot temporal de todas las matrices de ocupación
-     */
-    private Map<Airport, int[]> createTemporalSnapshot() {
-        Map<Airport, int[]> snapshot = new HashMap<>();
-        final int TOTAL_MINUTES = HORIZON_DAYS * 24 * 60;
-        
-        for (Airport airport : airports) {
-            int[] originalArray = temporalWarehouseOccupancy.get(airport);
-            int[] copyArray = new int[TOTAL_MINUTES];
-            System.arraycopy(originalArray, 0, copyArray, 0, Math.min(originalArray.length, TOTAL_MINUTES));
-            snapshot.put(airport, copyArray);
-        }
-        
-        return snapshot;
-    }
-    
-    /**
-     * CORRECCIÓN: Agregar ocupación temporal a un snapshot sin modificar las matrices originales
-     */
-    private boolean addTemporalOccupancyToSnapshot(Map<Airport, int[]> snapshot, Airport airport, 
-                                                  int startMinute, int durationMinutes, int productCount) {
-        if (airport == null || airport.getWarehouse() == null) {
-            return false;
-        }
-        
-        int[] occupancyArray = snapshot.get(airport);
-        if (occupancyArray == null) {
-            return false;
-        }
-        
-        int maxCapacity = airport.getWarehouse().getMaxCapacity();
-        final int TOTAL_MINUTES = HORIZON_DAYS * 24 * 60;
-        
-        // Verificar y agregar ocupación para cada minuto del período
-        for (int minute = startMinute; minute < Math.min(startMinute + durationMinutes, TOTAL_MINUTES); minute++) {
-            if (minute < 0 || minute >= occupancyArray.length) continue; // Verificar límites
-            
-            if (occupancyArray[minute] + productCount > maxCapacity) {
-                return false; // Violación de capacidad
-            }
-            occupancyArray[minute] += productCount;
-        }
-        
-        return true;
-    }
     
     
     
@@ -1300,30 +1395,12 @@ public class Solution {
         return validRoutes.get(selectedIndex);
     }
     
-    // PATCH: Método duplicado eliminado - usar la versión unificada arriba
+    /**
+     * Calcula un puntaje para una ruta basado en el margen de tiempo antes del deadline
+     * Rutas con mayor margen reciben puntajes más altos
+     */
     
-    private ArrayList<Flight> findDirectRoute(City origin, City destination) {
-        Airport originAirport = getAirportByCity(origin);
-        Airport destinationAirport = getAirportByCity(destination);
-        
-        if (originAirport == null || destinationAirport == null) {
-            return null;
-        }
-        
-        // Buscar vuelo directo
-        for (Flight flight : flights) {
-            if (flight.getOriginAirport().equals(originAirport) && 
-                flight.getDestinationAirport().equals(destinationAirport) &&
-                flight.getUsedCapacity() < flight.getMaxCapacity()) {
-                
-                ArrayList<Flight> route = new ArrayList<>();
-                route.add(flight);
-                return route;
-            }
-        }
-        
-        return null;
-    }
+    
     
     private ArrayList<Flight> findOneStopRoute(City origin, City destination) {
         Airport originAirport = getAirportByCity(origin);
@@ -1490,32 +1567,12 @@ public class Solution {
         return null;
     }
     
-    // PATCH: Método duplicado eliminado - usar la versión con cache
     
-    private boolean isRouteValid(Package pkg, ArrayList<Flight> route) {
-        if (route == null || route.isEmpty()) {
-            return pkg.getCurrentLocation().equals(pkg.getDestinationCity());
-        }
-        
-        // Verificar capacidad de vuelos
-        for (Flight flight : route) {
-            if (flight.getUsedCapacity() >= flight.getMaxCapacity()) {
-                return false;
-            }
-        }
-        
-        // Verificar que la ruta sea continua
-        for (int i = 0; i < route.size() - 1; i++) {
-            if (!route.get(i).getDestinationAirport().equals(route.get(i + 1).getOriginAirport())) {
-                return false;
-            }
-        }
-        
-        // Verificar restricciones de tiempo
-        return isDeadlineRespected(pkg, route);
-    }
     
     private boolean isDeadlineRespected(Package pkg, ArrayList<Flight> route) {
+        if (pkg == null || pkg.getOrderDate() == null || pkg.getDeliveryDeadline() == null) {
+            return false;
+        }
         double totalTime = 0;
         
         // CORRECCIÓN: Solo usar transportTime de vuelos (que ya respeta la política PACK)
@@ -1626,11 +1683,6 @@ public class Solution {
     
     private static final boolean DEBUG_MODE = false; // Cambiar a true para debug detallado
     
-    private void updateFlightCapacities(ArrayList<Flight> route, int productCount) {
-        for (Flight flight : route) {
-            flight.setUsedCapacity(flight.getUsedCapacity() + productCount);
-        }
-    }
     
     private int calculateSolutionWeight(HashMap<Package, ArrayList<Flight>> solutionMap) {
         // El peso de la solución considera múltiples factores:
@@ -1684,30 +1736,156 @@ public class Solution {
             }
         }
         
-        // Fórmula de peso que combina múltiples objetivos
-        // Maximizar paquetes asignados y entregas a tiempo, minimizar tiempo promedio
+        // Fórmula de peso optimizada para MoraPack
         double avgDeliveryTime = totalPackages > 0 ? totalDeliveryTime / totalPackages : 0;
         double avgCapacityUtilization = totalFlightsUsed > 0 ? totalCapacityUtilization / totalFlightsUsed : 0;
         double onTimeRate = totalPackages > 0 ? (double) onTimeDeliveries / totalPackages : 0;
         double avgDeliveryMargin = onTimeDeliveries > 0 ? totalDeliveryMargin / onTimeDeliveries : 0;
         
-        // Peso final con énfasis extremo en entregas a tiempo
+        // Componentes específicos de MoraPack
+        double continentalEfficiency = calculateContinentalEfficiency(solutionMap);
+        double warehouseUtilization = calculateWarehouseUtilization();
+        
+        // Peso final REBALANCEADO - PRIORIDAD: MÁS PAQUETES ASIGNADOS
         int weight = (int) (
-            totalPackages * 500 +             // Más paquetes asignados = mejor
-            totalProducts * 50 +              // Más productos transportados = mejor (NUEVO)
-            onTimeRate * 5000 +               // Entregas a tiempo con MÁXIMA prioridad
-            Math.min(avgDeliveryMargin * 100, 1000) + // Premiar margen de seguridad (máx 1000)
-            avgCapacityUtilization * 200 -    // Mayor utilización = mejor
-            avgDeliveryTime * 100             // Menos tiempo promedio = mejor
+            // PRIORIDAD ABSOLUTA: Cantidad de paquetes y productos (MAXIMIZAR)
+            totalPackages * 100000 +                // 100,000 puntos por paquete (DOMINANTE)
+            totalProducts * 10000 +                 // 10,000 puntos por producto (MUY ALTO)
+            
+            // FACTOR CALIDAD: On-time como multiplicador, no aditivo
+            onTimeRate * 5000 +                     // 5,000 puntos máximo por calidad on-time
+            
+            // EFICIENCIA OPERATIVA (secundaria)
+            Math.min(avgDeliveryMargin * 50, 1000) + // Margen de seguridad reducido
+            continentalEfficiency * 500 +           // Eficiencia continental
+            avgCapacityUtilization * 200 +          // Utilización de vuelos
+            warehouseUtilization * 100 +            // Utilización de almacenes
+            
+            // PENALIZACIONES MENORES
+            - avgDeliveryTime * 20 -                // Penalización tiempo reducida
+            - calculateRoutingComplexity(solutionMap) * 50 // Penalización complejidad reducida
         );
         
-        // Penalización SEVERA si hay entregas tardías
-        if (onTimeRate < 1.0) {
-            // Reducir drásticamente el peso si hay entregas tardías
-            weight = (int)(weight * Math.pow(onTimeRate, 3)); // Penalización cúbica
+        // NUEVA PENALIZACIÓN: Solo si on-time rate es muy bajo (< 80%)
+        if (onTimeRate < 0.8) {
+            weight = (int)(weight * 0.5); // Penalización 50% solo si muy malo
+        }
+        
+        // BONUS MODERADO por alta calidad (≥95% on-time)
+        if (onTimeRate >= 0.95 && totalPackages > 10) {
+            weight = (int)(weight * 1.1); // 10% bonus moderado por alta calidad
+        }
+        
+        // BONUS EXTRA por volumen alto (>1000 paquetes asignados)
+        if (totalPackages > 1000) {
+            weight = (int)(weight * 1.15); // 15% bonus por alto volumen
         }
         
         return weight;
+    }
+    
+    /**
+     * Calcula la eficiencia de rutas continentales vs intercontinentales
+     * Premia rutas directas y penaliza complejidad innecesaria
+     */
+    private double calculateContinentalEfficiency(HashMap<Package, ArrayList<Flight>> solutionMap) {
+        if (solutionMap.isEmpty()) return 0.0;
+        
+        int sameContinentDirect = 0;
+        int sameContinentOneStop = 0;
+        int differentContinentDirect = 0;
+        int differentContinentOneStop = 0;
+        int inefficientRoutes = 0;
+        
+        for (Map.Entry<Package, ArrayList<Flight>> entry : solutionMap.entrySet()) {
+            Package pkg = entry.getKey();
+            ArrayList<Flight> route = entry.getValue();
+            
+            boolean sameContinentRoute = pkg.getCurrentLocation().getContinent() == 
+                                        pkg.getDestinationCity().getContinent();
+            
+            if (route.isEmpty()) continue; // Ya en destino
+            
+            if (sameContinentRoute) {
+                if (route.size() == 1) sameContinentDirect++;
+                else if (route.size() == 2) sameContinentOneStop++;
+                else inefficientRoutes++;
+            } else {
+                if (route.size() == 1) differentContinentDirect++;
+                else if (route.size() <= 2) differentContinentOneStop++;
+                else inefficientRoutes++;
+            }
+        }
+        
+        // Puntuación basada en eficiencia esperada para MoraPack
+        double efficiency = sameContinentDirect * 1.0 +        // Ideal para mismo continente
+                           sameContinentOneStop * 0.8 +         // Aceptable para mismo continente
+                           differentContinentDirect * 1.2 +     // Excelente para diferentes continentes
+                           differentContinentOneStop * 1.0 +    // Bueno para diferentes continentes
+                           inefficientRoutes * (-0.5);         // Penalizar rutas ineficientes
+        
+        return efficiency;
+    }
+    
+    /**
+     * Calcula la utilización promedio de almacenes
+     */
+    private double calculateWarehouseUtilization() {
+        if (warehouseOccupancy.isEmpty()) return 0.0;
+        
+        double totalUtilization = 0.0;
+        int validWarehouses = 0;
+        
+        for (Map.Entry<Airport, Integer> entry : warehouseOccupancy.entrySet()) {
+            Airport airport = entry.getKey();
+            int occupancy = entry.getValue();
+            
+            if (airport.getWarehouse() != null && airport.getWarehouse().getMaxCapacity() > 0) {
+                double utilization = (double) occupancy / airport.getWarehouse().getMaxCapacity();
+                totalUtilization += utilization;
+                validWarehouses++;
+            }
+        }
+        
+        return validWarehouses > 0 ? totalUtilization / validWarehouses : 0.0;
+    }
+    
+    /**
+     * Calcula la complejidad de enrutamiento - penaliza rutas excesivamente complejas
+     */
+    private double calculateRoutingComplexity(HashMap<Package, ArrayList<Flight>> solutionMap) {
+        if (solutionMap.isEmpty()) return 0.0;
+        
+        double totalComplexity = 0.0;
+        
+        for (Map.Entry<Package, ArrayList<Flight>> entry : solutionMap.entrySet()) {
+            Package pkg = entry.getKey();
+            ArrayList<Flight> route = entry.getValue();
+            
+            if (route.isEmpty()) continue;
+            
+            // Penalizar rutas con más escalas de las necesarias
+            boolean sameContinentRoute = pkg.getCurrentLocation().getContinent() == 
+                                        pkg.getDestinationCity().getContinent();
+            
+            int expectedMaxStops = sameContinentRoute ? 1 : 2; // 1 para mismo continente, 2 para diferentes
+            
+            if (route.size() > expectedMaxStops) {
+                totalComplexity += (route.size() - expectedMaxStops) * 2.0; // Penalización por escala extra
+            }
+            
+            // Penalizar vuelos con baja utilización en rutas largas
+            if (route.size() > 1) {
+                for (Flight flight : route) {
+                    double utilization = (double) flight.getUsedCapacity() / flight.getMaxCapacity();
+                    if (utilization < 0.3) { // Vuelos con menos del 30% de utilización
+                        totalComplexity += 1.0;
+                    }
+                }
+            }
+        }
+        
+        return totalComplexity;
     }
 
     public boolean isSolutionValid() {
@@ -2013,16 +2191,6 @@ public class Solution {
         }
     }
     
-    /**
-     * Incrementa la ocupación del almacén de destino cuando se asigna un paquete.
-     * 
-     * @param destinationAirport aeropuerto de destino
-     * @param productCount cantidad de productos en el paquete
-     */
-    private void incrementWarehouseOccupancy(Airport destinationAirport, int productCount) {
-        int currentOccupancy = warehouseOccupancy.getOrDefault(destinationAirport, 0);
-        warehouseOccupancy.put(destinationAirport, currentOccupancy + productCount);
-    }
     
     /**
      * Valida temporalmente si una solución respeta las capacidades de almacenes
@@ -2060,11 +2228,11 @@ public class Solution {
             // El paquete ya está en destino, cliente tiene 2 horas para recoger
             Airport destinationAirport = getAirportByCity(pkg.getDestinationCity());
             int productCount = pkg.getProducts() != null ? pkg.getProducts().size() : 1;
-            return addTemporalOccupancy(destinationAirport, 0, Constants.CUSTOMER_PICKUP_MAX_HOURS * 60, productCount); // 2 horas para pickup
+            int startMinute = getPackageStartTime(pkg);
+            return addTemporalOccupancy(destinationAirport, startMinute, Constants.CUSTOMER_PICKUP_MAX_HOURS * 60, productCount); // 2 horas para pickup
         }
         
         int currentMinute = getPackageStartTime(pkg); // Momento cuando el paquete inicia su viaje
-        Airport currentAirport = getAirportByCity(pkg.getCurrentLocation());
         int productCount = pkg.getProducts() != null ? pkg.getProducts().size() : 1;
         
         for (int i = 0; i < route.size(); i++) {
@@ -2108,7 +2276,6 @@ public class Solution {
             if (i < route.size() - 1) {
                 currentMinute += 120; // Tiempo de conexión
             }
-            currentAirport = arrivalAirport;
         }
         
         // La ocupación del destino final ya se maneja en el bucle anterior
@@ -2135,7 +2302,9 @@ public class Solution {
         
         // CORRECCIÓN: Verificar y agregar ocupación para cada minuto del período (4 días)
         final int TOTAL_MINUTES = HORIZON_DAYS * 24 * 60;
-        for (int minute = startMinute; minute < Math.min(startMinute + durationMinutes, TOTAL_MINUTES); minute++) {
+        int clampedStart = Math.max(0, Math.min(startMinute, TOTAL_MINUTES - 1));
+        int clampedEnd = Math.max(0, Math.min(startMinute + durationMinutes, TOTAL_MINUTES));
+        for (int minute = clampedStart; minute < clampedEnd; minute++) {
             occupancyArray[minute] += productCount;
             if (occupancyArray[minute] > maxCapacity) {
                 return false; // Violación de capacidad
@@ -2145,21 +2314,6 @@ public class Solution {
         return true;
     }
     
-    /**
-     * Obtiene el minuto de inicio del día cuando un paquete comienza su viaje.
-     * Basado en la hora de pedido del paquete.
-     * 
-     * @param pkg paquete
-     * @return minuto del día (0-1439)
-     */
-    private int getPackageStartTime(Package pkg) {
-        // Usar la hora de pedido + un offset basado en el ID para distribuir los paquetes
-        int baseTime = pkg.getOrderDate().getHour() * 60 + pkg.getOrderDate().getMinute();
-        // Agregar un offset basado en el ID del paquete para distribuir en el tiempo
-        int offset = (pkg.getId() % 60); // Distribuir en hasta 60 minutos
-        final int TOTAL_MINUTES = HORIZON_DAYS * 24 * 60;
-        return (baseTime + offset) % TOTAL_MINUTES; // CORRECCIÓN: Asegurar que esté en el rango correcto
-    }
     
     /**
      * Encuentra el minuto del día con mayor ocupación en un aeropuerto específico.
