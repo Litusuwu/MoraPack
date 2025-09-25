@@ -41,6 +41,12 @@ public class Constants {
     // Control de logs
     public static final boolean VERBOSE_LOGGING = false; // true=logs detallados, false=logs mínimos
     public static final int LOG_ITERATION_INTERVAL = 100; // Mostrar solo cada X iteraciones
+    
+    // Diversificación extrema / Restart inteligente
+    public static final int STAGNATION_THRESHOLD_FOR_RESTART = 50; // Iteraciones sin mejora significativa para restart
+    public static final double SIGNIFICANT_IMPROVEMENT_THRESHOLD = 0.1; // 0.1% mínimo para considerar mejora significativa
+    public static final double EXTREME_DESTRUCTION_RATIO = 0.8; // 80% destrucción para restart
+    public static final int MAX_RESTARTS = 3; // Máximo número de restarts por ejecución
 
     public static final String LIMA_WAREHOUSE = "Lima, Peru";
     public static final String BRUSSELS_WAREHOUSE = "Brussels, Belgium";

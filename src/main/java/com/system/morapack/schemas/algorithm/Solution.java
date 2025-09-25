@@ -61,6 +61,11 @@ public class Solution {
     
     // Pool de paquetes no asignados para expansión ALNS
     private ArrayList<Package> unassignedPool;
+    
+    // Control de diversificación extrema / restart inteligente
+    private int iterationsSinceSignificantImprovement;
+    private int restartCount;
+    private double lastSignificantWeight;
 
     
     public Solution() {
@@ -141,6 +146,11 @@ public class Solution {
         
         // Inicializar pool de paquetes no asignados
         this.unassignedPool = new ArrayList<>();
+        
+        // Inicializar control de restart inteligente
+        this.iterationsSinceSignificantImprovement = 0;
+        this.restartCount = 0;
+        this.lastSignificantWeight = 0.0;
     }
 
     public void solve() {
@@ -289,6 +299,263 @@ public class Solution {
     }
     
     /**
+     * Aplica diversificación extrema cuando el algoritmo se estanca
+     * Utiliza diferentes estrategias para escapar de óptimos locales
+     */
+    private HashMap<Package, ArrayList<Flight>> applyExtremeDiversification(
+            HashMap<Package, ArrayList<Flight>> currentSolution, int iteration) {
+        
+        System.out.println("\n🚀 ACTIVANDO DIVERSIFICACIÓN EXTREMA 🚀");
+        System.out.println("Iteración " + iteration + ": " + iterationsSinceSignificantImprovement + 
+                         " iteraciones sin mejora significativa");
+        System.out.println("Restart #" + (restartCount + 1) + "/" + Constants.MAX_RESTARTS);
+        
+        // Seleccionar estrategia de restart basada en el número de restart
+        HashMap<Package, ArrayList<Flight>> newSolution;
+        
+        switch (restartCount % 3) {
+            case 0:
+                System.out.println("Estrategia: DESTRUCCIÓN EXTREMA (80%)");
+                newSolution = extremeDestruction(currentSolution);
+                break;
+                
+            case 1:
+                System.out.println("Estrategia: RESTART GREEDY COMPLETO");
+                newSolution = greedyRestart();
+                break;
+                
+            case 2:
+                System.out.println("Estrategia: RESTART HÍBRIDO");
+                newSolution = hybridRestart(currentSolution);
+                break;
+                
+            default:
+                System.out.println("Estrategia: DESTRUCCIÓN EXTREMA (fallback)");
+                newSolution = extremeDestruction(currentSolution);
+                break;
+        }
+        
+        // Actualizar contadores
+        restartCount++;
+        iterationsSinceSignificantImprovement = 0;
+        
+        // Reiniciar temperatura para mayor exploración
+        temperature = 100.0;
+        
+        // Actualizar el pool de no asignados
+        updateUnassignedPool(newSolution);
+        
+        int newWeight = calculateSolutionWeight(newSolution);
+        System.out.println("Peso después de diversificación extrema: " + newWeight);
+        System.out.println("Paquetes asignados: " + newSolution.size() + "/" + packages.size());
+        System.out.println("=== FIN DIVERSIFICACIÓN EXTREMA ===\n");
+        
+        return newSolution;
+    }
+    
+    /**
+     * Estrategia 1: Destrucción extrema (80% de la solución)
+     */
+    private HashMap<Package, ArrayList<Flight>> extremeDestruction(HashMap<Package, ArrayList<Flight>> currentSolution) {
+        HashMap<Package, ArrayList<Flight>> newSolution = new HashMap<>(currentSolution);
+        
+        // Destruir 80% de los paquetes aleatoriamente
+        ArrayList<Package> assignedPackages = new ArrayList<>(newSolution.keySet());
+        Collections.shuffle(assignedPackages, random);
+        
+        int packagesToRemove = (int)(assignedPackages.size() * Constants.EXTREME_DESTRUCTION_RATIO);
+        
+        for (int i = 0; i < packagesToRemove && i < assignedPackages.size(); i++) {
+            newSolution.remove(assignedPackages.get(i));
+        }
+        
+        System.out.println("Destruidos " + packagesToRemove + "/" + assignedPackages.size() + " paquetes");
+        
+        // Reconstruir estado de capacidades
+        rebuildCapacitiesFromSolution(newSolution);
+        rebuildWarehousesFromSolution(newSolution);
+        
+        return newSolution;
+    }
+    
+    /**
+     * Estrategia 2: Restart greedy completo con estrategia diferente
+     */
+    private HashMap<Package, ArrayList<Flight>> greedyRestart() {
+        // Resetear capacidades completamente
+        for (Flight f : flights) {
+            f.setUsedCapacity(0);
+        }
+        initializeWarehouseOccupancy();
+        
+        HashMap<Package, ArrayList<Flight>> newSolution = new HashMap<>();
+        
+        // Usar una estrategia de ordenamiento diferente para diversificación
+        ArrayList<Package> sortedPackages = new ArrayList<>(packages);
+        
+        // Alternar entre diferentes estrategias según el número de restart
+        switch (restartCount % 4) {
+            case 0:
+                // Por prioridad inversa (menor prioridad primero para explorar diferente)
+                sortedPackages.sort((p1, p2) -> {
+                    double priority1 = p1.getPriority();
+                    double priority2 = p2.getPriority();
+                    return Double.compare(priority1, priority2); // Menor prioridad primero
+                });
+                System.out.println("Ordenamiento: Prioridad inversa");
+                break;
+                
+            case 1:
+                // Por número de productos (más productos primero)
+                sortedPackages.sort((p1, p2) -> {
+                    int products1 = p1.getProducts() != null ? p1.getProducts().size() : 1;
+                    int products2 = p2.getProducts() != null ? p2.getProducts().size() : 1;
+                    return Integer.compare(products2, products1);
+                });
+                System.out.println("Ordenamiento: Más productos primero");
+                break;
+                
+            case 2:
+                // Por distancia (más lejanos primero)
+                sortedPackages.sort((p1, p2) -> {
+                    boolean p1SameContinent = p1.getCurrentLocation().getContinent() == p1.getDestinationCity().getContinent();
+                    boolean p2SameContinent = p2.getCurrentLocation().getContinent() == p2.getDestinationCity().getContinent();
+                    return Boolean.compare(p1SameContinent, p2SameContinent); // Intercontinentales primero
+                });
+                System.out.println("Ordenamiento: Intercontinentales primero");
+                break;
+                
+            case 3:
+                // Completamente aleatorio
+                Collections.shuffle(sortedPackages, random);
+                System.out.println("Ordenamiento: Aleatorio");
+                break;
+        }
+        
+        // Asignar paquetes con estrategia greedy
+        int assigned = 0;
+        for (Package pkg : sortedPackages) {
+            ArrayList<Flight> bestRoute = findBestRouteWithTimeWindows(pkg, newSolution);
+            if (bestRoute != null) {
+                int productCount = pkg.getProducts() != null ? pkg.getProducts().size() : 1;
+                if (canAssignWithSpaceOptimization(pkg, bestRoute, newSolution)) {
+                    newSolution.put(pkg, bestRoute);
+                    updateFlightCapacities(bestRoute, productCount);
+                    
+                    Airport destinationAirport = getAirportByCity(pkg.getDestinationCity());
+                    if (destinationAirport != null) {
+                        incrementWarehouseOccupancy(destinationAirport, productCount);
+                    }
+                    assigned++;
+                }
+            }
+        }
+        
+        System.out.println("Restart greedy: " + assigned + "/" + packages.size() + " paquetes asignados");
+        return newSolution;
+    }
+    
+    /**
+     * Estrategia 3: Restart híbrido (combina elementos de diferentes soluciones)
+     */
+    private HashMap<Package, ArrayList<Flight>> hybridRestart(HashMap<Package, ArrayList<Flight>> currentSolution) {
+        // Mantener solo los 30% mejores paquetes de la solución actual
+        HashMap<Package, ArrayList<Flight>> newSolution = new HashMap<>();
+        
+        // Ordenar paquetes por calidad de ruta (directos y con buen tiempo)
+        ArrayList<Map.Entry<Package, ArrayList<Flight>>> sortedEntries = new ArrayList<>(currentSolution.entrySet());
+        sortedEntries.sort((e1, e2) -> {
+            try {
+                int score1 = calculateRouteQuality(e1.getKey(), e1.getValue());
+                int score2 = calculateRouteQuality(e2.getKey(), e2.getValue());
+                
+                // Comparación principal por calidad
+                int qualityComparison = Integer.compare(score2, score1); // Mejores primero
+                if (qualityComparison != 0) return qualityComparison;
+                
+                // Criterio de desempate 1: Por número de vuelos (menos es mejor)
+                int flightCountComparison = Integer.compare(e1.getValue().size(), e2.getValue().size());
+                if (flightCountComparison != 0) return flightCountComparison;
+                
+                // Criterio de desempate 2: Por prioridad del paquete (mayor es mejor)
+                int priorityComparison = Double.compare(e2.getKey().getPriority(), e1.getKey().getPriority());
+                if (priorityComparison != 0) return priorityComparison;
+                
+                // Criterio de desempate final: Por hashCode para garantizar consistencia total
+                return Integer.compare(e1.getKey().hashCode(), e2.getKey().hashCode());
+                
+            } catch (Exception ex) {
+                // Fallback seguro: usar solo propiedades básicas
+                System.out.println("Warning: Error en comparación de calidad, usando fallback");
+                return Integer.compare(e1.getValue().size(), e2.getValue().size());
+            }
+        });
+        
+        // Mantener el 30% mejor
+        int packagesToKeep = (int)(sortedEntries.size() * 0.3);
+        for (int i = 0; i < packagesToKeep && i < sortedEntries.size(); i++) {
+            Map.Entry<Package, ArrayList<Flight>> entry = sortedEntries.get(i);
+            newSolution.put(entry.getKey(), entry.getValue());
+        }
+        
+        System.out.println("Híbrido: Manteniendo " + packagesToKeep + " mejores paquetes, " +
+                         "regenerando " + (currentSolution.size() - packagesToKeep));
+        
+        // Reconstruir capacidades basadas en lo que se mantuvo
+        rebuildCapacitiesFromSolution(newSolution);
+        rebuildWarehousesFromSolution(newSolution);
+        
+        return newSolution;
+    }
+    
+    /**
+     * Calcula la calidad de una ruta (mayor es mejor)
+     * VERSIÓN ESTABLE: Solo usa propiedades intrínsecas para comparación consistente
+     */
+    private int calculateRouteQuality(Package pkg, ArrayList<Flight> route) {
+        if (route == null || route.isEmpty()) return 0;
+        
+        int score = 0;
+        
+        // Bonus por rutas directas (propiedad intrínseca)
+        if (route.size() == 1) score += 1000;
+        else if (route.size() == 2) score += 500;
+        else score += 100; // Penalizar rutas muy largas
+        
+        // Calcular tiempo total de ruta (propiedad intrínseca)
+        double totalTime = 0;
+        for (Flight flight : route) {
+            totalTime += flight.getTransportTime();
+        }
+        if (route.size() > 1) {
+            totalTime += (route.size() - 1) * 2.0; // Tiempo de conexión
+        }
+        
+        // Bonus basado en tiempo total (menos tiempo = mejor)
+        // Usar escala que mantenga valores positivos
+        score += Math.max(0, 2000 - (int)(totalTime * 10));
+        
+        // Bonus por número de productos (más productos = mejor utilización)
+        int productCount = pkg.getProducts() != null ? pkg.getProducts().size() : 1;
+        score += productCount * 10;
+        
+        // Bonus por prioridad del paquete (propiedad intrínseca)
+        score += (int)(pkg.getPriority() * 50);
+        
+        // Bonus por rutas continentales vs intercontinentales (propiedad intrínseca)
+        boolean sameContinentRoute = pkg.getCurrentLocation().getContinent() == 
+                                   pkg.getDestinationCity().getContinent();
+        if (sameContinentRoute) {
+            score += 200; // Rutas continentales son más eficientes
+        } else {
+            score += 100; // Rutas intercontinentales son más complejas pero necesarias
+        }
+        
+        // Asegurar que siempre retorna un valor positivo y consistente
+        return Math.max(1, score);
+    }
+    
+    /**
      * Ejecuta el algoritmo ALNS (Adaptive Large Neighborhood Search)
      */
     private void runALNSAlgorithm() {
@@ -308,6 +575,10 @@ public class Solution {
         }
         
         System.out.println("Peso de solución inicial: " + currentWeight);
+        
+        // Inicializar control de diversificación extrema
+        lastSignificantWeight = currentWeight;
+        iterationsSinceSignificantImprovement = 0;
         
         int bestWeight = currentWeight;
         int improvements = 0;
@@ -414,6 +685,17 @@ public class Solution {
                     stagnationCounter = 0;
                     diversificationMode = false; // Volver a intensificación después de mejora
                     updateUnassignedPool(currentSolution); // Actualizar pool de no asignados
+                    
+                    // CONTROL DE DIVERSIFICACIÓN EXTREMA: Verificar si es mejora significativa
+                    if (improvementRatio >= Constants.SIGNIFICANT_IMPROVEMENT_THRESHOLD / 100.0) {
+                        // Mejora significativa (≥0.1%) - resetear contador de estancamiento
+                        iterationsSinceSignificantImprovement = 0;
+                        lastSignificantWeight = bestWeight;
+                    } else {
+                        // Mejora mínima - continuar contando estancamiento
+                        iterationsSinceSignificantImprovement++;
+                    }
+                    
                     // Siempre mostrar mejoras en la mejor solución global
                     System.out.println("Iteración " + iteration + ": ¡Nueva mejor solución! Peso: " + bestWeight + 
                                      " (mejora: " + String.format("%.2f%%", improvementRatio * 100) + ")" +
@@ -450,6 +732,11 @@ public class Solution {
                     operatorScores[destructionOp][repairOp] += 5; // Recompensa mínima por intentar
                     noImprovementCount++;
                 }
+                
+                // INCREMENTAR CONTADOR si no hubo mejora
+                if (!accepted) {
+                    iterationsSinceSignificantImprovement++;
+                }
             }
             
             // PATCH: Restaurar snapshots si no se acepta la solución
@@ -475,6 +762,28 @@ public class Solution {
                 if (Constants.VERBOSE_LOGGING) {
                     System.out.println("Iteración " + iteration + ": Volviendo a modo INTENSIFICACIÓN");
                 }
+            }
+            
+            // CONTROL DE DIVERSIFICACIÓN EXTREMA
+            if (iterationsSinceSignificantImprovement >= Constants.STAGNATION_THRESHOLD_FOR_RESTART && 
+                restartCount < Constants.MAX_RESTARTS) {
+                
+                // Aplicar diversificación extrema para escapar del óptimo local
+                currentSolution = applyExtremeDiversification(currentSolution, iteration);
+                currentWeight = calculateSolutionWeight(currentSolution);
+                
+                // Actualizar la mejor solución si la diversificación extrema mejoró
+                if (currentWeight > bestWeight) {
+                    bestWeight = currentWeight;
+                    bestSolution.clear();
+                    bestSolution.put(new HashMap<>(currentSolution), currentWeight);
+                    improvements++;
+                    System.out.println("🎉 ¡Diversificación extrema encontró mejor solución! Peso: " + bestWeight);
+                }
+                
+                // Reconstruir estado después de diversificación extrema
+                rebuildCapacitiesFromSolution(currentSolution);
+                rebuildWarehousesFromSolution(currentSolution);
             }
             
             // Actualizar pesos cada segmentSize iteraciones
@@ -509,6 +818,7 @@ public class Solution {
         System.out.println("ALNS completado:");
         System.out.println("  Mejoras encontradas: " + improvements);
         System.out.println("  Peso final: " + bestWeight);
+        System.out.println("  Diversificaciones extremas aplicadas: " + restartCount + "/" + Constants.MAX_RESTARTS);
         if (Constants.VERBOSE_LOGGING) {
             System.out.println("  Temperatura final: " + temperature);
         }
