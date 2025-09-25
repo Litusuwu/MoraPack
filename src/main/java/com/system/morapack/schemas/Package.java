@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 
 @Getter
 @Setter
@@ -20,4 +21,5 @@ public class Package {
     private City currentLocation;
     private Route assignedRoute;
     private double priority;
+    private ArrayList<Product> products;
 }

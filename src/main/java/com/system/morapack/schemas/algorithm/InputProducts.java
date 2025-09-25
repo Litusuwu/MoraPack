@@ -6,6 +6,8 @@ import com.system.morapack.schemas.Continent;
 import com.system.morapack.schemas.Customer;
 import com.system.morapack.schemas.Package;
 import com.system.morapack.schemas.PackageStatus;
+import com.system.morapack.schemas.Product;
+import com.system.morapack.schemas.Status;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -23,6 +25,8 @@ public class InputProducts {
     private ArrayList<Airport> airports;
     private Map<String, Airport> airportMap;
     private Random random;
+    private int packageId = 1;
+    private int productId = 1;
 
     public InputProducts(String filePath, ArrayList<Airport> airports) {
         this.filePath = filePath;
@@ -51,15 +55,21 @@ public class InputProducts {
                 }
                 
                 // Parse product data
-                // Format: PRIORITY(01/04/12/24) HOUR MINUTE DESTINATION_AIRPORT CUSTOMER_ID PACKAGE_ID
+                // Format: dd-hh-mm-dest-###-IdClien
+                // dd: días de prioridad (01/04/12/24)
+                // hh: horas (01-23)
+                // mm: minutos (01-59) 
+                // dest: código aeropuerto destino
+                // ###: cantidad de productos (001-999)
+                // IdClien: ID cliente (7 posiciones numéricas)
                 String[] parts = line.trim().split("\\s+");
                 if (parts.length >= 6) {
-                    int priority = Integer.parseInt(parts[0]);
+                    int priorityDays = Integer.parseInt(parts[0]);
                     int hour = Integer.parseInt(parts[1]);
                     int minute = Integer.parseInt(parts[2]);
                     String destinationAirportCode = parts[3];
-                    int customerId = Integer.parseInt(parts[4]);
-                    // Package code is available in parts[5] but not used currently
+                    int productQuantity = Integer.parseInt(parts[4]); // Cantidad de productos en el paquete
+                    int customerId = Integer.parseInt(parts[5]); // ID del cliente
                     
                     // Find destination airport
                     Airport destinationAirport = airportMap.get(destinationAirportCode);
@@ -81,9 +91,9 @@ public class InputProducts {
                             orderDate = orderDate.plusDays(1);
                         }
                         
-                        // Set delivery deadline based on priority (in days)
+                        // Set delivery deadline based on priority days
                         LocalDateTime deliveryDeadline;
-                        switch (priority) {
+                        switch (priorityDays) {
                             case 1:  // Highest priority - 1 day
                                 deliveryDeadline = orderDate.plus(1, ChronoUnit.DAYS);
                                 break;
@@ -110,6 +120,16 @@ public class InputProducts {
                         pkg.setDeliveryDeadline(deliveryDeadline);
                         pkg.setStatus(PackageStatus.PENDING);
                         
+                        // Create products for this package
+                        ArrayList<Product> products = new ArrayList<>();
+                        for (int i = 0; i < productQuantity; i++) {
+                            Product product = new Product();
+                            product.setId(productId++);
+                            product.setStatus(Status.NOT_ASSIGNED); // Product not assigned initially
+                            products.add(product);
+                        }
+                        pkg.setProducts(products);
+                        
                         // Assume the package starts at a random warehouse in a different continent
                         City currentLocation = getRandomWarehouseLocation(destinationAirport.getCity().getContinent());
                         pkg.setCurrentLocation(currentLocation);
@@ -132,30 +152,50 @@ public class InputProducts {
     }
     
     private City getRandomWarehouseLocation(Continent destinationContinent) {
-        // Choose a different continent than the destination
-        Continent[] continents = Continent.values();
-        Continent sourceContinent;
-        do {
-            sourceContinent = continents[random.nextInt(continents.length)];
-        } while (sourceContinent == destinationContinent);
+        // MoraPack has headquarters in Lima (Peru), Brussels (Belgium), and Baku (Azerbaijan)
+        // Packages must start from one of these three locations with unlimited stock
         
-        // Find airports in the chosen continent
-        ArrayList<Airport> continentAirports = new ArrayList<>();
+        ArrayList<City> moraPackWarehouses = new ArrayList<>();
+        
+        // Find MoraPack warehouse cities
         for (Airport airport : airports) {
-            if (airport.getCity().getContinent() == sourceContinent) {
-                continentAirports.add(airport);
+            City city = airport.getCity();
+            String cityName = city.getName();
+            
+            if (cityName.equals("Lima") || cityName.equals("Bruselas") || cityName.equals("Baku") ||
+                cityName.contains("Lima") || cityName.contains("Bruselas") || cityName.contains("Baku")) {
+                // Prefer warehouses in different continent than destination to maximize coverage
+                if (city.getContinent() != destinationContinent) {
+                    moraPackWarehouses.add(city);
+                }
             }
         }
         
-        // If no airports found in other continents, pick any airport
-        if (continentAirports.isEmpty()) {
-            Airport randomAirport = airports.get(random.nextInt(airports.size()));
-            return randomAirport.getCity();
+        // If no warehouses in different continent, allow any MoraPack warehouse
+        if (moraPackWarehouses.isEmpty()) {
+            for (Airport airport : airports) {
+                City city = airport.getCity();
+                String cityName = city.getName();
+                
+                if (cityName.equals("Lima") || cityName.equals("Bruselas") || cityName.equals("Baku") ||
+                    cityName.contains("Lima") || cityName.contains("Bruselas") || cityName.contains("Baku")) {
+                    moraPackWarehouses.add(city);
+                }
+            }
         }
         
-        // Return a random airport from the chosen continent
-        Airport randomAirport = continentAirports.get(random.nextInt(continentAirports.size()));
-        return randomAirport.getCity();
+        // If somehow no MoraPack warehouses found (shouldn't happen), fallback to Lima
+        if (moraPackWarehouses.isEmpty()) {
+            System.err.println("Warning: No MoraPack warehouses found, using fallback");
+            for (Airport airport : airports) {
+                if (airport.getCity().getName().contains("Lima")) {
+                    return airport.getCity();
+                }
+            }
+        }
+        
+        // Return random MoraPack warehouse
+        return moraPackWarehouses.get(random.nextInt(moraPackWarehouses.size()));
     }
     
     private double calculatePriority(LocalDateTime orderDate, LocalDateTime deliveryDeadline) {
