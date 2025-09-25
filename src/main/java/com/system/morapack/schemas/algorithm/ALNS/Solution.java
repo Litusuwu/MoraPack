@@ -572,8 +572,10 @@ public class Solution {
         }
         
         if (currentSolution == null) {
+          if (Constants.VERBOSE_LOGGING) {
             System.out.println("Error: No se pudo obtener la solución inicial");
-            return;
+          }
+          return;
         }
         
         System.out.println("Peso de solución inicial: " + currentWeight);
@@ -587,7 +589,7 @@ public class Solution {
         // Bucle principal ALNS
         for (int iteration = 0; iteration < maxIterations; iteration++) {
             // Log de iteración solo si es verboso o es múltiplo del intervalo
-            if (Constants.VERBOSE_LOGGING || iteration % Constants.LOG_ITERATION_INTERVAL == 0) {
+            if (iteration % Constants.LOG_ITERATION_INTERVAL == 0) {
                 System.out.println("ALNS Iteración " + iteration + "/" + maxIterations);
             }
             
@@ -2058,11 +2060,11 @@ public class Solution {
         // Peso final REBALANCEADO - PRIORIDAD: MÁS PAQUETES ASIGNADOS
         int weight = (int) (
             // PRIORIDAD ABSOLUTA: Cantidad de paquetes y productos (MAXIMIZAR)
-            totalPackages * 100000 +                // 100,000 puntos por paquete (DOMINANTE)
-            totalProducts * 10000 +                 // 10,000 puntos por producto (MUY ALTO)
+            totalPackages * 5000 +                // 100,000 puntos por paquete (DOMINANTE)
+            totalProducts * 1000 +                 // 10,000 puntos por producto (MUY ALTO)
             
             // FACTOR CALIDAD: On-time como multiplicador, no aditivo
-            onTimeRate * 5000 +                     // 5,000 puntos máximo por calidad on-time
+            onTimeRate * 500 +                     // 5,000 puntos máximo por calidad on-time
             
             // EFICIENCIA OPERATIVA (secundaria)
             Math.min(avgDeliveryMargin * 50, 1000) + // Margen de seguridad reducido
