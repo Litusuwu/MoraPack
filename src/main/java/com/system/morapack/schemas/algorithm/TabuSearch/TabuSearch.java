@@ -14,7 +14,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.time.LocalDateTime;
 
 /**
  * Implementación principal del algoritmo Tabu Search para el problema de asignación de paquetes
@@ -266,7 +265,7 @@ public class TabuSearch {
     private TabuSolution generateInitialSolution() {
         System.out.println("=== GENERANDO SOLUCIÓN INICIAL PARA TABU SEARCH ===");
         
-        // Crear una solución vacía
+        // Crear una solución vacía - la unitización se aplica internamente en TabuSolution
         TabuSolution solution = new TabuSolution(packages, airports, flights);
         
         // Decidir entre greedy o aleatoria basado en el parámetro
@@ -383,7 +382,7 @@ public class TabuSearch {
         int intensifiedCount = 0;
         
         for (int i = 0; i < maxPackagesToIntensify; i++) {
-            Package pkg = assignedPackages.get(i);
+            // Procesar paquetes de alta prioridad
             
             // Generar movimientos de reasignación
             List<TabuMove> reassignMoves = neighborhoodGenerator.generateReassignMoves(
@@ -417,7 +416,7 @@ public class TabuSearch {
         }
         
         if (Constants.VERBOSE_LOGGING) {
-            System.out.println("Intensificación completada: " + intensifiedCount + " paquetes reasignados");
+            System.out.println("Intensificación completada: " + intensifiedCount + " movimientos aplicados");
         }
         
         intensificationCount++;
@@ -516,9 +515,7 @@ public class TabuSearch {
         // Reasignar paquetes
         int reassignedCount = 0;
         for (int i = 0; i < Math.min(packagesToReassign, assignedPackages.size()); i++) {
-            Package pkg = assignedPackages.get(i);
-            
-            // Generar rutas alternativas
+            // Generar rutas alternativas para paquetes seleccionados
             List<TabuMove> reassignMoves = neighborhoodGenerator.generateReassignMoves(
                 currentSolution.getSolution(), 1);
             

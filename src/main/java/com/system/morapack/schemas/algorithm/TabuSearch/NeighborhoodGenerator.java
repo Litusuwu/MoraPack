@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.time.temporal.ChronoUnit;
 
 /**
  * Genera movimientos vecinos para explorar el espacio de soluciones
@@ -179,7 +180,6 @@ public class NeighborhoodGenerator {
         // Limitar el número de movimientos a generar por tipo
         int solutionSize = currentSolution.size();
         int unassignedSize = unassignedPackages.size();
-        int totalItems = solutionSize + unassignedSize;
         
         // Calcular proporción de cada tipo de movimiento
         int maxInserts = Math.min(30, unassignedSize);
@@ -544,14 +544,24 @@ public class NeighborhoodGenerator {
             totalTime += (route.size() - 1) * 2.0; // 2 horas por conexión
         }
         
-        // Verificar cumplimiento de deadlines según continente
+        // Verificar cumplimiento de deadlines según continente (promesas MoraPack)
         boolean sameContinentRoute = pkg.getCurrentLocation().getContinent() == 
                                     pkg.getDestinationCity().getContinent();
-            double maxHours = sameContinentRoute ? 
+        double maxHours = sameContinentRoute ? 
                          Constants.SAME_CONTINENT_MAX_DELIVERY_TIME * 24.0 : 
                          Constants.DIFFERENT_CONTINENT_MAX_DELIVERY_TIME * 24.0;
         
-        return totalTime <= maxHours;
+        if (totalTime > maxHours) {
+            return false; // Excede promesas MoraPack
+        }
+        
+        // Verificar deadline específico del cliente
+        if (pkg.getOrderDate() != null && pkg.getDeliveryDeadline() != null) {
+            long hoursUntilDeadline = ChronoUnit.HOURS.between(pkg.getOrderDate(), pkg.getDeliveryDeadline());
+            return totalTime <= hoursUntilDeadline;
+        }
+        
+        return true;
     }
     
     /**

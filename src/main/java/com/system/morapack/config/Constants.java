@@ -51,4 +51,28 @@ public class Constants {
     public static final String LIMA_WAREHOUSE = "Lima, Peru";
     public static final String BRUSSELS_WAREHOUSE = "Brussels, Belgium";
     public static final String BAKU_WAREHOUSE = "Baku, Azerbaijan";
+    
+    // Tabu Search parameters
+    public static final int TABU_TENURE = 50;
+    public static final int MAX_ITERATIONS_TABU = 1000;
+    public static final int STAGNATION_THRESHOLD_TABU = 100;
+    public static final int DIVERSIFICATION_THRESHOLD_TABU = 50;
+    public static final int INTENSIFICATION_THRESHOLD_TABU = 20;
+    public static final double DIVERSIFICATION_FACTOR_TABU = 0.3;
+    public static final double INTENSIFICATION_FACTOR_TABU = 0.1;
+    public static final int MAX_DIVERSIFICATIONS_TABU = 10;
+    public static final int MAX_INTENSIFICATIONS_TABU = 5;
+    public static final double NEIGHBORHOOD_SIZE_FACTOR = 0.1;
+    public static final double ASPIRATION_THRESHOLD_PERCENTAGE = 0.05;
+    
+    // Product unitization - Feature toggle
+    public static final boolean ENABLE_PRODUCT_UNITIZATION = true;
+    
+    // Temporal validation constants
+    public static final int HORIZON_DAYS = 4; // 4 días de horizonte temporal
+    public static final int CONNECTION_TIME_MINUTES = 120; // 2 horas de conexión
+    public static final int PRE_FLIGHT_PROCESSING_MINUTES = 120; // 2 horas antes del vuelo
+    
+    // MoraPack headquarters validation
+    public static final boolean VALIDATE_HEADQUARTERS_ORIGIN = true;
 }

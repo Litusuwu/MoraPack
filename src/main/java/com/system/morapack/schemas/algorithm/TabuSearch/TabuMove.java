@@ -4,7 +4,6 @@ import com.system.morapack.schemas.Flight;
 import com.system.morapack.schemas.Package;
 
 import java.util.ArrayList;
-import java.util.Objects;
 
 /**
  * Representa un movimiento en el algoritmo Tabu Search
