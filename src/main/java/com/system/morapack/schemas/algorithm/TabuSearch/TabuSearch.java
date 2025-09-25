@@ -32,7 +32,6 @@ public class TabuSearch {
     private int tabuListSize;
     private long tabuTenure;
     private double intensificationThreshold;
-    private double diversificationThreshold;
     
     // Componentes del algoritmo
     private TabuList tabuList;
@@ -68,7 +67,6 @@ public class TabuSearch {
         this.tabuListSize = 50;
         this.tabuTenure = 10000; // 10 segundos
         this.intensificationThreshold = 0.05; // 5% de mejora
-        this.diversificationThreshold = 0.02; // 2% de mejora
         
         // Inicializar componentes
         this.tabuList = new TabuList(tabuListSize, tabuTenure);
@@ -379,7 +377,6 @@ public class TabuSearch {
         
         // Intentar reasignar paquetes de alta prioridad a mejores rutas
         int maxPackagesToIntensify = Math.min(50, assignedPackages.size());
-        int intensifiedCount = 0;
         
         for (int i = 0; i < maxPackagesToIntensify; i++) {
             // Procesar paquetes de alta prioridad
@@ -411,15 +408,9 @@ public class TabuSearch {
             if (bestMove != null) {
                 currentSolution = bestNeighbor;
                 tabuList.add(bestMove.getInverseMove());
-                intensifiedCount++;
             }
         }
         
-        if (Constants.VERBOSE_LOGGING) {
-            System.out.println("Intensificación completada: " + intensifiedCount + " movimientos aplicados");
-        }
-        
-        intensificationCount++;
         inDiversificationMode = false;
     }
     

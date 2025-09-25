@@ -69,7 +69,6 @@ public class Solution {
     // Control de diversificación extrema / restart inteligente
     private int iterationsSinceSignificantImprovement;
     private int restartCount;
-    private double lastSignificantWeight;
 
     
     public Solution() {
@@ -154,7 +153,6 @@ public class Solution {
         // Inicializar control de restart inteligente
         this.iterationsSinceSignificantImprovement = 0;
         this.restartCount = 0;
-        this.lastSignificantWeight = 0.0;
     }
 
     public void solve() {
@@ -580,8 +578,6 @@ public class Solution {
         
         System.out.println("Peso de solución inicial: " + currentWeight);
         
-        // Inicializar control de diversificación extrema
-        lastSignificantWeight = currentWeight;
         iterationsSinceSignificantImprovement = 0;
         
         int bestWeight = currentWeight;
@@ -694,7 +690,6 @@ public class Solution {
                     if (improvementRatio >= Constants.SIGNIFICANT_IMPROVEMENT_THRESHOLD / 100.0) {
                         // Mejora significativa (≥0.1%) - resetear contador de estancamiento
                         iterationsSinceSignificantImprovement = 0;
-                        lastSignificantWeight = bestWeight;
                     } else {
                         // Mejora mínima - continuar contando estancamiento
                         iterationsSinceSignificantImprovement++;

@@ -87,7 +87,6 @@ public class ALNSDestruction {
         // CORRECCIÓN: Construir lista con score = w1*slack + w2*productos
         class Cand { 
             Package pkg; 
-            ArrayList<Flight> route; 
             double score; 
         }
         
@@ -106,8 +105,7 @@ public class ALNSDestruction {
             double score = 1.0 * slack + 0.2 * prods; // pesos: slack y productos
             
             Cand c = new Cand();
-            c.pkg = p; 
-            c.route = r; 
+            c.pkg = p;
             c.score = score;
             cands.add(c);
         }
@@ -411,7 +409,6 @@ public class ALNSDestruction {
         // CORRECCIÓN: Score por paquete basado en congestión crítica + productos - urgencia
         class Cand { 
             Package pkg; 
-            ArrayList<Flight> route; 
             double score; 
         }
         
@@ -442,7 +439,6 @@ public class ALNSDestruction {
             if (score > 0) {
                 Cand c = new Cand();
                 c.pkg = p;
-                c.route = r;
                 c.score = score;
                 cands.add(c);
             }
