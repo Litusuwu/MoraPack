@@ -2,6 +2,7 @@ package com.system.morapack.schemas.algorithm.ALNS;
 
 import com.system.morapack.schemas.Flight;
 import com.system.morapack.schemas.Package;
+import com.system.morapack.config.Constants;
 import com.system.morapack.schemas.Continent;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -277,10 +278,9 @@ public class ALNSDestruction {
             
             partialSolution.remove(selectedPackage);
         }
-        
-        System.out.println("Destrucción geográfica: " + numToDestroy + 
-                          " paquetes eliminados del continente " + selectedContinent);
-        
+        if (Constants.VERBOSE_LOGGING) {
+          System.out.println("Destrucción geográfica: " + numToDestroy + " paquetes eliminados del continente " + selectedContinent);
+        }
         return new DestructionResult(partialSolution, destroyedPackages);
     }
     
@@ -379,9 +379,9 @@ public class ALNSDestruction {
             destroyed.add(new java.util.AbstractMap.SimpleEntry<>(sel, new ArrayList<>(route)));
             partialSolution.remove(sel);
         }
-        
-        System.out.println("Destrucción temporal por slack: " + numToDestroy + " paquetes del grupo " + groupName);
-        
+        if (Constants.VERBOSE_LOGGING) {
+          System.out.println("Destrucción temporal por slack: " + numToDestroy + " paquetes del grupo " + groupName);
+        }
         return new DestructionResult(partialSolution, destroyed);
     }
     
@@ -466,8 +466,9 @@ public class ALNSDestruction {
             destroyed.add(new java.util.AbstractMap.SimpleEntry<>(sel, new ArrayList<>(route)));
             partial.remove(sel);
         }
-        
-        System.out.println("Destrucción por congestión (mejorada): " + numToDestroy + " paquetes");
+        if (Constants.VERBOSE_LOGGING){
+          System.out.println("Destrucción por congestión (mejorada): " + numToDestroy + " paquetes");
+        }
         return new DestructionResult(partial, destroyed);
     }
     

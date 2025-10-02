@@ -11,6 +11,7 @@ import java.util.Random;
 import java.util.Collections;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import com.system.morapack.config.Constants;
 
 /**
  * Clase que implementa operadores de reparación para el algoritmo ALNS
@@ -110,9 +111,9 @@ public class ALNSRepair {
                 unassignedPackages.add(pkg);
             }
         }
-        
-        System.out.println("Reparación Greedy: " + reinsertedCount + "/" + packagesToRepair.size() + 
-                          " paquetes reinsertados");
+        if (Constants.VERBOSE_LOGGING) {
+          System.out.println("Reparación Greedy: " + reinsertedCount + "/" + packagesToRepair.size() + " paquetes reinsertados");
+        }
         
         return new RepairResult(repairedSolution, unassignedPackages);
     }
@@ -207,10 +208,9 @@ public class ALNSRepair {
                 break;
             }
         }
-        
-        System.out.println("Reparación por Regret: " + reinsertedCount + "/" + destroyedPackages.size() + 
-                          " paquetes reinsertados");
-        
+        if (Constants.VERBOSE_LOGGING){
+          System.out.println("Reparación por Regret: " + reinsertedCount + "/" + destroyedPackages.size() + " paquetes reinsertados");
+        }
         return new RepairResult(repairedSolution, unassignedPackages);
     }
     
@@ -262,10 +262,9 @@ public class ALNSRepair {
                 unassignedPackages.add(pkg);
             }
         }
-        
-        System.out.println("Reparación por tiempo: " + reinsertedCount + "/" + packagesToRepair.size() + 
-                          " paquetes reinsertados");
-        
+        if (Constants.VERBOSE_LOGGING) {
+          System.out.println("Reparación por tiempo: " + reinsertedCount + "/" + packagesToRepair.size() + " paquetes reinsertados");
+        }
         return new RepairResult(repairedSolution, unassignedPackages);
     }
     
@@ -316,10 +315,9 @@ public class ALNSRepair {
                 unassignedPackages.add(pkg);
             }
         }
-        
-        System.out.println("Reparación por capacidad: " + reinsertedCount + "/" + packagesToRepair.size() + 
-                          " paquetes reinsertados");
-        
+        if (Constants.VERBOSE_LOGGING) {
+          System.out.println("Reparación por capacidad: " + reinsertedCount + "/" + packagesToRepair.size() + " paquetes reinsertados");
+        }
         return new RepairResult(repairedSolution, unassignedPackages);
     }
     
@@ -508,7 +506,6 @@ public class ALNSRepair {
     private boolean isDeadlineRespected(Package pkg, ArrayList<Flight> route) {
         double totalTime = 0;
         
-        // CORRECCIÓN: Solo usar transportTime de vuelos (sin doble conteo)
         for (Flight flight : route) {
             totalTime += flight.getTransportTime();
         }
@@ -518,7 +515,6 @@ public class ALNSRepair {
             totalTime += (route.size() - 1) * 2.0;
         }
         
-        // CORRECCIÓN: Validar promesas MoraPack explícitamente
         City origin = pkg.getCurrentLocation();
         City destination = pkg.getDestinationCity();
         boolean sameContinentRoute = origin.getContinent() == destination.getContinent();
@@ -535,13 +531,11 @@ public class ALNSRepair {
             totalTime = totalTime * (1.0 + safetyMargin);
         }
         
-        // CORRECCIÓN: Usar orderDate en lugar de "now"
         long hoursUntilDeadline = ChronoUnit.HOURS.between(pkg.getOrderDate(), pkg.getDeliveryDeadline());
         
         return totalTime <= hoursUntilDeadline;
     }
     
-    // Métodos de búsqueda de rutas (simplificados, podrían referenciar a Solution.java)
     private ArrayList<Flight> findDirectRoute(City origin, City destination) {
         Airport originAirport = getAirportByCity(origin);
         Airport destinationAirport = getAirportByCity(destination);
@@ -619,7 +613,6 @@ public class ALNSRepair {
         
         if (originAirport == null || destinationAirport == null) return null;
         
-        // Simplificado: buscar solo algunas combinaciones aleatorias para eficiencia
         ArrayList<Airport> candidates = new ArrayList<>();
         for (Airport airport : airports) {
             if (!airport.equals(originAirport) && !airport.equals(destinationAirport)) {

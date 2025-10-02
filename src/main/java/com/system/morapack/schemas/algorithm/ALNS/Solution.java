@@ -9,7 +9,6 @@ import com.system.morapack.config.Constants;
 import com.system.morapack.schemas.algorithm.Input.InputAirports;
 import com.system.morapack.schemas.algorithm.Input.InputData;
 import com.system.morapack.schemas.algorithm.Input.InputProducts;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -561,255 +560,255 @@ public class Solution {
      * Ejecuta el algoritmo ALNS (Adaptive Large Neighborhood Search)
      */
     private void runALNSAlgorithm() {
-        // Obtener la solución actual y su peso
-        HashMap<Package, ArrayList<Flight>> currentSolution = null;
-        int currentWeight = Integer.MAX_VALUE;
-        
-        for (Map.Entry<HashMap<Package, ArrayList<Flight>>, Integer> entry : solution.entrySet()) {
-            currentSolution = new HashMap<>(entry.getKey());
-            currentWeight = entry.getValue();
-            break;
+      // Obtener la solución actual y su peso
+      HashMap<Package, ArrayList<Flight>> currentSolution = null;
+      int currentWeight = Integer.MAX_VALUE;
+      
+      for (Map.Entry<HashMap<Package, ArrayList<Flight>>, Integer> entry : solution.entrySet()) {
+          currentSolution = new HashMap<>(entry.getKey());
+          currentWeight = entry.getValue();
+          break;
+      }
+      
+      if (currentSolution == null) {
+        if (Constants.VERBOSE_LOGGING) {
+          System.out.println("Error: No se pudo obtener la solución inicial");
         }
-        
-        if (currentSolution == null) {
-          if (Constants.VERBOSE_LOGGING) {
-            System.out.println("Error: No se pudo obtener la solución inicial");
+        return;
+      }
+      
+      System.out.println("Peso de solución inicial: " + currentWeight);
+      
+      iterationsSinceSignificantImprovement = 0;
+      
+      int bestWeight = currentWeight;
+      int improvements = 0;
+      int noImprovementCount = 0;
+      
+      for (int iteration = 0; iteration < maxIterations; iteration++) {
+          // Log de iteración solo si es verboso o es múltiplo del intervalo
+          if (iteration % Constants.LOG_ITERATION_INTERVAL == 0) {
+              System.out.println("ALNS Iteración " + iteration + "/" + maxIterations);
           }
-          return;
-        }
-        
-        System.out.println("Peso de solución inicial: " + currentWeight);
-        
-        iterationsSinceSignificantImprovement = 0;
-        
-        int bestWeight = currentWeight;
-        int improvements = 0;
-        int noImprovementCount = 0;
-        
-        // Bucle principal ALNS
-        for (int iteration = 0; iteration < maxIterations; iteration++) {
-            // Log de iteración solo si es verboso o es múltiplo del intervalo
-            if (iteration % Constants.LOG_ITERATION_INTERVAL == 0) {
-                System.out.println("ALNS Iteración " + iteration + "/" + maxIterations);
-            }
-            
-            // Seleccionar operadores basado en pesos
-            int[] selectedOps = selectOperators();
-            int destructionOp = selectedOps[0];
-            int repairOp = selectedOps[1];
-            
-            // Log de operadores solo en modo verboso
-            if (Constants.VERBOSE_LOGGING) {
-                System.out.println("  Operadores seleccionados: Destrucción=" + destructionOp + ", Reparación=" + repairOp);
-            }
-            
-            // Crear copia de la solución actual
-            HashMap<Package, ArrayList<Flight>> tempSolution = new HashMap<>(currentSolution);
-            
-            // PATCH: Crear snapshots completos antes de modificar
-            Map<Flight, Integer> capacitySnapshot = snapshotCapacities();
-            Map<Airport, Integer> warehouseSnapshot = snapshotWarehouses();
-            
-            // Aplicar operador de destrucción
-            if (Constants.VERBOSE_LOGGING) {
-                System.out.println("  Aplicando operador de destrucción...");
-            }
-            long startTime = System.currentTimeMillis();
-            ALNSDestruction.DestructionResult destructionResult = applyDestructionOperator(
-                tempSolution, destructionOp);
-            long endTime = System.currentTimeMillis();
-            
-            if (Constants.VERBOSE_LOGGING) {
-                System.out.println("  Operador de destrucción completado en " + (endTime - startTime) + "ms");
-            }
-            
-            if (destructionResult == null || destructionResult.getDestroyedPackages().isEmpty()) {
-                if (Constants.VERBOSE_LOGGING) {
-                    System.out.println("  No se pudo destruir nada, continuando...");
-                }
-                continue; // No se pudo destruir nada
-            }
-            
-            if (Constants.VERBOSE_LOGGING) {
-                System.out.println("  Paquetes destruidos: " + destructionResult.getDestroyedPackages().size());
-            }
-            
-            // PATCH: Usar solución parcial de destrucción y reconstruir estado
-            tempSolution = new HashMap<>(destructionResult.getPartialSolution());
-            rebuildCapacitiesFromSolution(tempSolution);
-            rebuildWarehousesFromSolution(tempSolution);
-            
-            // NUEVO: Expandir con paquetes no asignados para exploración
-            ArrayList<Map.Entry<Package, ArrayList<Flight>>> expandedPackages = 
-                expandWithUnassignedPackages(destructionResult.getDestroyedPackages(), 100);
-            
-            // Aplicar operador de reparación con lista expandida
-            ALNSRepair.RepairResult repairResult = applyRepairOperator(
-                tempSolution, repairOp, expandedPackages);
-            
-            if (repairResult == null || !repairResult.isSuccess()) {
-                // PATCH: Restaurar snapshots si falla la reparación
-                restoreCapacities(capacitySnapshot);
-                restoreWarehouses(warehouseSnapshot);
-                continue; // No se pudo reparar
-            }
-            
-            // PATCH: Usar solución reparada y reconstruir estado
-            tempSolution = new HashMap<>(repairResult.getRepairedSolution());
-            rebuildCapacitiesFromSolution(tempSolution);
-            rebuildWarehousesFromSolution(tempSolution);
-            
-            // Evaluar nueva solución
-            int tempWeight = calculateSolutionWeight(tempSolution);
-            
-            // Actualizar contador de uso
-            operatorUsage[destructionOp][repairOp]++;
-            
-            // Criterio de aceptación mejorado con múltiples niveles de recompensa
-            boolean accepted = false;
-            double improvementRatio = 0.0;
-            
-            if (tempWeight > currentWeight) {
-                improvementRatio = (double)(tempWeight - currentWeight) / Math.max(currentWeight, 1);
-                currentSolution = tempSolution;
-                currentWeight = tempWeight;
-                accepted = true;
+          
+          // Seleccionar operadores basado en pesos
+          int[] selectedOps = selectOperators();
+          int destructionOp = selectedOps[0];
+          int repairOp = selectedOps[1];
+          
+          // Log de operadores solo en modo verboso
+          if (Constants.VERBOSE_LOGGING) {
+              System.out.println("  Operadores seleccionados: Destrucción=" + destructionOp + ", Reparación=" + repairOp);
+          }
+          
+          // Crear copia de la solución actual
+          HashMap<Package, ArrayList<Flight>> tempSolution = new HashMap<>(currentSolution);
+          
+          // PATCH: Crear snapshots completos antes de modificar
+          Map<Flight, Integer> capacitySnapshot = snapshotCapacities();
+          Map<Airport, Integer> warehouseSnapshot = snapshotWarehouses();
+          
+          // Aplicar operador de destrucción
+          if (Constants.VERBOSE_LOGGING) {
+              System.out.println("  Aplicando operador de destrucción...");
+          }
+          long startTime = System.currentTimeMillis();
+          ALNSDestruction.DestructionResult destructionResult = applyDestructionOperator(
+              tempSolution, destructionOp);
+          long endTime = System.currentTimeMillis();
+          
+          if (Constants.VERBOSE_LOGGING) {
+              System.out.println("  Operador de destrucción completado en " + (endTime - startTime) + "ms");
+          }
+          
+          if (destructionResult == null || destructionResult.getDestroyedPackages().isEmpty()) {
+              if (Constants.VERBOSE_LOGGING) {
+                  System.out.println("  No se pudo destruir nada, continuando...");
+              }
+              continue; // No se pudo destruir nada
+          }
+          
+          if (Constants.VERBOSE_LOGGING) {
+              System.out.println("  Paquetes destruidos: " + destructionResult.getDestroyedPackages().size());
+          }
+          
+          // PATCH: Usar solución parcial de destrucción y reconstruir estado
+          tempSolution = new HashMap<>(destructionResult.getPartialSolution());
+          rebuildCapacitiesFromSolution(tempSolution);
+          rebuildWarehousesFromSolution(tempSolution);
+          
+          // NUEVO: Expandir con paquetes no asignados para exploración
+          ArrayList<Map.Entry<Package, ArrayList<Flight>>> expandedPackages = 
+              expandWithUnassignedPackages(destructionResult.getDestroyedPackages(), 100);
+          
+          // Aplicar operador de reparación con lista expandida
+          ALNSRepair.RepairResult repairResult = applyRepairOperator(
+              tempSolution, repairOp, expandedPackages);
+          
+          if (repairResult == null || !repairResult.isSuccess()) {
+              // PATCH: Restaurar snapshots si falla la reparación
+              restoreCapacities(capacitySnapshot);
+              restoreWarehouses(warehouseSnapshot);
+              continue; // No se pudo reparar
+          }
+          
+          // PATCH: Usar solución reparada y reconstruir estado
+          tempSolution = new HashMap<>(repairResult.getRepairedSolution());
+          rebuildCapacitiesFromSolution(tempSolution);
+          rebuildWarehousesFromSolution(tempSolution);
+          
+          // Evaluar nueva solución
+          int tempWeight = calculateSolutionWeight(tempSolution);
+          
+          // Actualizar contador de uso
+          operatorUsage[destructionOp][repairOp]++;
+          
+          // Criterio de aceptación mejorado con múltiples niveles de recompensa
+          boolean accepted = false;
+          double improvementRatio = 0.0;
+          
+          if (tempWeight > currentWeight) {
+              improvementRatio = (double)(tempWeight - currentWeight) / Math.max(currentWeight, 1);
+              currentSolution = tempSolution;
+              currentWeight = tempWeight;
+              accepted = true;
 
-                if (tempWeight > bestWeight) {
-                    // Nueva mejor solución global
-                    bestWeight = tempWeight;
-                    bestSolution.clear();
-                    bestSolution.put(new HashMap<>(currentSolution), currentWeight);
-                    operatorScores[destructionOp][repairOp] += 300; // Recompensa máxima
-                    improvements++;
-                    noImprovementCount = 0;
-                    lastImprovementIteration = iteration;
-                    stagnationCounter = 0;
-                    diversificationMode = false; // Volver a intensificación después de mejora
-                    updateUnassignedPool(currentSolution); // Actualizar pool de no asignados
-                    
-                    // CONTROL DE DIVERSIFICACIÓN EXTREMA: Verificar si es mejora significativa
-                    if (improvementRatio >= Constants.SIGNIFICANT_IMPROVEMENT_THRESHOLD / 100.0) {
-                        // Mejora significativa (≥0.1%) - resetear contador de estancamiento
-                        iterationsSinceSignificantImprovement = 0;
-                    } else {
-                        // Mejora mínima - continuar contando estancamiento
-                        iterationsSinceSignificantImprovement++;
-                    }
-                    
-                    // Siempre mostrar mejoras en la mejor solución global
-                    System.out.println("Iteración " + iteration + ": ¡Nueva mejor solución! Peso: " + bestWeight + 
-                                     " (mejora: " + String.format("%.2f%%", improvementRatio * 100) + ")" +
-                                     " | No asignados: " + unassignedPool.size());
-                } else if (improvementRatio > 0.05) {
-                    // Mejora significativa (>5%)
-                    operatorScores[destructionOp][repairOp] += 100;
-                    noImprovementCount = Math.max(0, noImprovementCount - 5);
-                    updateUnassignedPool(currentSolution); // Actualizar pool de no asignados
-                } else if (improvementRatio > 0.01) {
-                    // Mejora moderada (1-5%)
-                    operatorScores[destructionOp][repairOp] += 50;
-                    noImprovementCount = Math.max(0, noImprovementCount - 2);
-                    updateUnassignedPool(currentSolution); // Actualizar pool de no asignados
-                } else {
-                    // Mejora pequeña (<1%)
-                    operatorScores[destructionOp][repairOp] += 25;
-                    updateUnassignedPool(currentSolution); // Actualizar pool de no asignados
-                }
-            } else {
-                // Simulated Annealing con ajuste por calidad de la solución
-                double delta = tempWeight - currentWeight;
-                double adjustedTemp = temperature * (1.0 + 0.1 * Math.random()); // Pequeña variación
-                double probability = Math.exp(delta / adjustedTemp);
-                
-                if (random.nextDouble() < probability) {
-                    currentSolution = tempSolution;
-                    currentWeight = tempWeight;
-                    accepted = true;
-                    updateUnassignedPool(currentSolution); // Actualizar pool de no asignados
-                    operatorScores[destructionOp][repairOp] += 15; // Recompensa menor por exploración
-                    noImprovementCount++;
-                } else {
-                    operatorScores[destructionOp][repairOp] += 5; // Recompensa mínima por intentar
-                    noImprovementCount++;
-                }
-                
-                // INCREMENTAR CONTADOR si no hubo mejora
-                if (!accepted) {
-                    iterationsSinceSignificantImprovement++;
-                }
-            }
-            
-            // PATCH: Restaurar snapshots si no se acepta la solución
-            if (!accepted) {
-                restoreCapacities(capacitySnapshot);
-                restoreWarehouses(warehouseSnapshot);
-                noImprovementCount++;
-            }
-            // NOTA: Si se acepta, tempSolution ya tiene el estado correcto reconstruido
-            
-            // Manejar diversificación vs intensificación
-            stagnationCounter = iteration - lastImprovementIteration;
-            if (stagnationCounter > diversificationThreshold && !diversificationMode) {
-                diversificationMode = true;
-                diversificationFactor = 1.5; // Aumentar destrucción
-                temperature *= 2.0; // Aumentar temperatura para más exploración
-                if (Constants.VERBOSE_LOGGING) {
-                    System.out.println("Iteración " + iteration + ": Activando modo DIVERSIFICACIÓN");
-                }
-            } else if (diversificationMode && stagnationCounter <= diversificationThreshold / 2) {
-                diversificationMode = false;
-                diversificationFactor = 1.0; // Destrucción normal
-                if (Constants.VERBOSE_LOGGING) {
-                    System.out.println("Iteración " + iteration + ": Volviendo a modo INTENSIFICACIÓN");
-                }
-            }
-            
-            // CONTROL DE DIVERSIFICACIÓN EXTREMA
-            if (iterationsSinceSignificantImprovement >= Constants.STAGNATION_THRESHOLD_FOR_RESTART && 
-                restartCount < Constants.MAX_RESTARTS) {
-                
-                // Aplicar diversificación extrema para escapar del óptimo local
-                currentSolution = applyExtremeDiversification(currentSolution, iteration);
-                currentWeight = calculateSolutionWeight(currentSolution);
-                
-                // Actualizar la mejor solución si la diversificación extrema mejoró
-                if (currentWeight > bestWeight) {
-                    bestWeight = currentWeight;
-                    bestSolution.clear();
-                    bestSolution.put(new HashMap<>(currentSolution), currentWeight);
-                    improvements++;
-                    System.out.println("🎉 ¡Diversificación extrema encontró mejor solución! Peso: " + bestWeight);
-                }
-                
-                // Reconstruir estado después de diversificación extrema
-                rebuildCapacitiesFromSolution(currentSolution);
-                rebuildWarehousesFromSolution(currentSolution);
-            }
-            
-            // Actualizar pesos cada segmentSize iteraciones
-            if ((iteration + 1) % segmentSize == 0) {
-                updateOperatorWeights();
-                temperature *= coolingRate;
-                
-                // Reportar estado
-                if (iteration % 100 == 0) {
-                    System.out.println("Iteración " + iteration + 
-                                     " | Mejor peso: " + bestWeight + 
-                                     " | Temperatura: " + String.format("%.2f", temperature) +
-                                     " | Modo: " + (diversificationMode ? "DIVERSIFICACIÓN" : "INTENSIFICACIÓN"));
-                }
-            }
-            
-            // Parada temprana inteligente
-            if (stagnationCounter > 300) { // Más iteraciones antes de parar
-                if (Constants.VERBOSE_LOGGING) {
-                    System.out.println("Parada temprana en iteración " + iteration + 
-                                     " (sin mejoras por " + stagnationCounter + " iteraciones)");
-                }
-                break;
-            }
-        }
+              if (tempWeight > bestWeight) {
+                  // Nueva mejor solución global
+                  bestWeight = tempWeight;
+                  bestSolution.clear();
+                  bestSolution.put(new HashMap<>(currentSolution), currentWeight);
+                  operatorScores[destructionOp][repairOp] += 300; // Recompensa máxima
+                  improvements++;
+                  noImprovementCount = 0;
+                  lastImprovementIteration = iteration;
+                  stagnationCounter = 0;
+                  diversificationMode = false; // Volver a intensificación después de mejora
+                  updateUnassignedPool(currentSolution); // Actualizar pool de no asignados
+                  
+                  // CONTROL DE DIVERSIFICACIÓN EXTREMA: Verificar si es mejora significativa
+                  if (improvementRatio >= Constants.SIGNIFICANT_IMPROVEMENT_THRESHOLD / 100.0) {
+                      // Mejora significativa (≥0.1%) - resetear contador de estancamiento
+                      iterationsSinceSignificantImprovement = 0;
+                  } else {
+                      // Mejora mínima - continuar contando estancamiento
+                      iterationsSinceSignificantImprovement++;
+                  }
+                  
+                  // Siempre mostrar mejoras en la mejor solución global
+                  System.out.println("Iteración " + iteration + ": ¡Nueva mejor solución! Peso: " + bestWeight + 
+                                  " (mejora: " + String.format("%.2f%%", improvementRatio * 100) + ")" +
+                                  " | No asignados: " + unassignedPool.size());
+              } else if (improvementRatio > 0.05) {
+                  // Mejora significativa (>5%)
+                  operatorScores[destructionOp][repairOp] += 100;
+                  noImprovementCount = Math.max(0, noImprovementCount - 5);
+                  updateUnassignedPool(currentSolution); // Actualizar pool de no asignados
+              } else if (improvementRatio > 0.01) {
+                  // Mejora moderada (1-5%)
+                  operatorScores[destructionOp][repairOp] += 50;
+                  noImprovementCount = Math.max(0, noImprovementCount - 2);
+                  updateUnassignedPool(currentSolution); // Actualizar pool de no asignados
+              } else {
+                  // Mejora pequeña (<1%)
+                  operatorScores[destructionOp][repairOp] += 25;
+                  updateUnassignedPool(currentSolution); // Actualizar pool de no asignados
+              }
+          } else {
+              // Simulated Annealing con ajuste por calidad de la solución
+              double delta = tempWeight - currentWeight;
+              double adjustedTemp = temperature * (1.0 + 0.1 * Math.random()); // Pequeña variación
+              double probability = Math.exp(delta / adjustedTemp);
+              
+              if (random.nextDouble() < probability) {
+                  currentSolution = tempSolution;
+                  currentWeight = tempWeight;
+                  accepted = true;
+                  updateUnassignedPool(currentSolution); // Actualizar pool de no asignados
+                  operatorScores[destructionOp][repairOp] += 15; // Recompensa menor por exploración
+                  noImprovementCount++;
+              } else {
+                  operatorScores[destructionOp][repairOp] += 5; // Recompensa mínima por intentar
+                  noImprovementCount++;
+              }
+              
+              // INCREMENTAR CONTADOR si no hubo mejora
+              if (!accepted) {
+                  iterationsSinceSignificantImprovement++;
+              }
+          }
+          
+          // PATCH: Restaurar snapshots si no se acepta la solución
+          if (!accepted) {
+              restoreCapacities(capacitySnapshot);
+              restoreWarehouses(warehouseSnapshot);
+              noImprovementCount++;
+          }
+          // NOTA: Si se acepta, tempSolution ya tiene el estado correcto reconstruido
+          
+          // Manejar diversificación vs intensificación
+          stagnationCounter = iteration - lastImprovementIteration;
+          if (stagnationCounter > diversificationThreshold && !diversificationMode) {
+              diversificationMode = true;
+              diversificationFactor = 1.5; // Aumentar destrucción
+              temperature *= 2.0; // Aumentar temperatura para más exploración
+              if (Constants.VERBOSE_LOGGING) {
+                  System.out.println("Iteración " + iteration + ": Activando modo DIVERSIFICACIÓN");
+              }
+          } else if (diversificationMode && stagnationCounter <= diversificationThreshold / 2) {
+              diversificationMode = false;
+              diversificationFactor = 1.0; // Destrucción normal
+              if (Constants.VERBOSE_LOGGING) {
+                  System.out.println("Iteración " + iteration + ": Volviendo a modo INTENSIFICACIÓN");
+              }
+          }
+          
+          // CONTROL DE DIVERSIFICACIÓN EXTREMA
+          if (iterationsSinceSignificantImprovement >= Constants.STAGNATION_THRESHOLD_FOR_RESTART && 
+              restartCount < Constants.MAX_RESTARTS) {
+              
+              // Aplicar diversificación extrema para escapar del óptimo local
+              currentSolution = applyExtremeDiversification(currentSolution, iteration);
+              currentWeight = calculateSolutionWeight(currentSolution);
+              
+              // Actualizar la mejor solución si la diversificación extrema mejoró
+              if (currentWeight > bestWeight) {
+                  bestWeight = currentWeight;
+                  bestSolution.clear();
+                  bestSolution.put(new HashMap<>(currentSolution), currentWeight);
+                  improvements++;
+                  System.out.println("🎉 ¡Diversificación extrema encontró mejor solución! Peso: " + bestWeight);
+              }
+              
+              // Reconstruir estado después de diversificación extrema
+              rebuildCapacitiesFromSolution(currentSolution);
+              rebuildWarehousesFromSolution(currentSolution);
+          }
+          
+          // Actualizar pesos cada segmentSize iteraciones
+          if ((iteration + 1) % segmentSize == 0) {
+              updateOperatorWeights();
+              temperature *= coolingRate;
+              
+              // Reportar estado
+              if (iteration % 100 == 0) {
+                  System.out.println("Iteración " + iteration + 
+                                  " | Mejor peso: " + bestWeight + 
+                                  " | Temperatura: " + String.format("%.2f", temperature) +
+                                  " | Modo: " + (diversificationMode ? "DIVERSIFICACIÓN" : "INTENSIFICACIÓN"));
+              }
+          }
+          
+          // Parada temprana inteligente
+          if (stagnationCounter > 300) { // Más iteraciones antes de parar
+              if (Constants.VERBOSE_LOGGING) {
+                  System.out.println("Parada temprana en iteración " + iteration + 
+                                  " (sin mejoras por " + stagnationCounter + " iteraciones)");
+              }
+              break;
+          }
+      }
+      
         
         // Actualizar la solución final
         solution.clear();
@@ -1609,13 +1608,6 @@ public class Solution {
         
         return delayedPkg;
     }
-    
-    
-    
-    
-    
-    
-    
     
     private ArrayList<Flight> findBestRoute(Package pkg) {
         City origin = pkg.getCurrentLocation();
@@ -2646,5 +2638,21 @@ public class Solution {
         }
         
         return new int[]{peakMinute, maxOccupancy};
+    }
+
+    private int calculateMaxWarehouseCapacity(List<Airport> airports) {
+        if (airports == null || airports.isEmpty()) {
+            return 0; // O un valor por defecto
+        }
+        
+        int maxCapacity = 0;
+        for (Airport airport : airports) {
+            if (airport.getWarehouse() != null) {
+                int capacity = airport.getWarehouse().getMaxCapacity();
+                maxCapacity += capacity;
+            }
+        }
+        
+        return maxCapacity;
     }
 }
