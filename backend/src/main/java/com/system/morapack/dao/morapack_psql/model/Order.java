@@ -27,13 +27,11 @@ public class Order {
   private String name;
 
   @OneToOne(fetch = FetchType.LAZY, optional = false)
-  @JoinColumn(name = "city_id", nullable = false)
-  @Column(name = "origin", nullable = false)
+  @JoinColumn(name = "origin_city_id", nullable = false)
   private City origin;
 
   @OneToOne(fetch = FetchType.LAZY, optional = false)
-  @JoinColumn(name = "destination_id", nullable = false)
-  @Column(name = "destination", nullable = false)
+  @JoinColumn(name = "destination_city_id", nullable = false)
   private City destination;
 
   @Column(name = "delivery_date", nullable = false)
@@ -57,6 +55,6 @@ public class Order {
   private LocalDateTime updatedAt;
 
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
-  @Column(name = "customer_id", nullable = false)
+  @JoinColumn(name = "customer_id", nullable = false)
   private Customer customer;
 }
