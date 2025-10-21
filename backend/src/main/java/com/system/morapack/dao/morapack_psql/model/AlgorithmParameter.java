@@ -6,11 +6,7 @@ import lombok.*;
 @Getter @Setter @Builder
 @AllArgsConstructor @NoArgsConstructor
 @Entity
-@Table(name = "algorithm_parameters",
-       indexes = {
-         @Index(name = "idx_algo_param_plan", columnList = "plan_id"),
-         @Index(name = "idx_algo_param_name", columnList = "algorithm_name")
-       })
+@Table(name = "algorithm_parameters")
 public class AlgorithmParameter {
 
   @Id

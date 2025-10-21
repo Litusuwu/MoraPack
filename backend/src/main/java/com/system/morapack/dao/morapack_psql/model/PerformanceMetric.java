@@ -1,7 +1,5 @@
 package com.system.morapack.dao.morapack_psql.model;
 
-
-
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -9,13 +7,7 @@ import java.time.LocalDateTime;
 @Getter @Setter @Builder
 @AllArgsConstructor @NoArgsConstructor
 @Entity
-@Table(name = "performance_metric",
-       indexes = {
-         @Index(name = "idx_metric_plan",      columnList = "plan_id"),
-         @Index(name = "idx_metric_event",     columnList = "event_id"),
-         @Index(name = "idx_metric_scenario",  columnList = "scenario_id"),
-         @Index(name = "idx_metric_algorithm", columnList = "algorithm_id")
-       })
+@Table(name = "performance_metric")
 public class PerformanceMetric {
 
   @Id
