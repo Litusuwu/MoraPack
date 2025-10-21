@@ -1,7 +1,7 @@
 package com.system.morapack.schemas.algorithm.TabuSearch;
 
-import com.system.morapack.schemas.Flight;
-import com.system.morapack.schemas.Package;
+import com.system.morapack.schemas.FlightSchema;
+import com.system.morapack.schemas.OrderSchema;
 
 import java.util.ArrayList;
 
@@ -18,21 +18,21 @@ public class TabuMove {
     }
     
     private final MoveType moveType;
-    private final Package primaryPackage;
-    private final ArrayList<Flight> primaryRoute;
-    private final Package secondaryPackage; // Usado solo para SWAP
-    private final ArrayList<Flight> secondaryRoute; // Usado para REASSIGN y SWAP
+    private final OrderSchema primaryOrderSchema;
+    private final ArrayList<FlightSchema> primaryRoute;
+    private final OrderSchema secondaryOrderSchema; // Usado solo para SWAP
+    private final ArrayList<FlightSchema> secondaryRoute; // Usado para REASSIGN y SWAP
     private final int hash;
     private final long timestamp;
     
     /**
      * Constructor para movimientos INSERT y REMOVE
      */
-    public TabuMove(MoveType moveType, Package pkg, ArrayList<Flight> route) {
+    public TabuMove(MoveType moveType, OrderSchema pkg, ArrayList<FlightSchema> route) {
         this.moveType = moveType;
-        this.primaryPackage = pkg;
+        this.primaryOrderSchema = pkg;
         this.primaryRoute = route != null ? new ArrayList<>(route) : new ArrayList<>();
-        this.secondaryPackage = null;
+        this.secondaryOrderSchema = null;
         this.secondaryRoute = null;
         this.timestamp = System.currentTimeMillis();
         this.hash = calculateHash();
@@ -41,11 +41,11 @@ public class TabuMove {
     /**
      * Constructor para movimientos REASSIGN
      */
-    public TabuMove(MoveType moveType, Package pkg, ArrayList<Flight> oldRoute, ArrayList<Flight> newRoute) {
+    public TabuMove(MoveType moveType, OrderSchema pkg, ArrayList<FlightSchema> oldRoute, ArrayList<FlightSchema> newRoute) {
         this.moveType = moveType;
-        this.primaryPackage = pkg;
+        this.primaryOrderSchema = pkg;
         this.primaryRoute = oldRoute != null ? new ArrayList<>(oldRoute) : new ArrayList<>();
-        this.secondaryPackage = null;
+        this.secondaryOrderSchema = null;
         this.secondaryRoute = newRoute != null ? new ArrayList<>(newRoute) : new ArrayList<>();
         this.timestamp = System.currentTimeMillis();
         this.hash = calculateHash();
@@ -54,11 +54,11 @@ public class TabuMove {
     /**
      * Constructor para movimientos SWAP
      */
-    public TabuMove(MoveType moveType, Package pkg1, ArrayList<Flight> route1, Package pkg2, ArrayList<Flight> route2) {
+    public TabuMove(MoveType moveType, OrderSchema pkg1, ArrayList<FlightSchema> route1, OrderSchema pkg2, ArrayList<FlightSchema> route2) {
         this.moveType = moveType;
-        this.primaryPackage = pkg1;
+        this.primaryOrderSchema = pkg1;
         this.primaryRoute = route1 != null ? new ArrayList<>(route1) : new ArrayList<>();
-        this.secondaryPackage = pkg2;
+        this.secondaryOrderSchema = pkg2;
         this.secondaryRoute = route2 != null ? new ArrayList<>(route2) : new ArrayList<>();
         this.timestamp = System.currentTimeMillis();
         this.hash = calculateHash();
@@ -68,19 +68,19 @@ public class TabuMove {
         return moveType;
     }
     
-    public Package getPrimaryPackage() {
-        return primaryPackage;
+    public OrderSchema getPrimaryPackage() {
+        return primaryOrderSchema;
     }
     
-    public ArrayList<Flight> getPrimaryRoute() {
+    public ArrayList<FlightSchema> getPrimaryRoute() {
         return primaryRoute;
     }
     
-    public Package getSecondaryPackage() {
-        return secondaryPackage;
+    public OrderSchema getSecondaryPackage() {
+        return secondaryOrderSchema;
     }
     
-    public ArrayList<Flight> getSecondaryRoute() {
+    public ArrayList<FlightSchema> getSecondaryRoute() {
         return secondaryRoute;
     }
     
@@ -94,13 +94,13 @@ public class TabuMove {
     public TabuMove getInverseMove() {
         switch (moveType) {
             case INSERT:
-                return new TabuMove(MoveType.REMOVE, primaryPackage, primaryRoute);
+                return new TabuMove(MoveType.REMOVE, primaryOrderSchema, primaryRoute);
             case REMOVE:
-                return new TabuMove(MoveType.INSERT, primaryPackage, primaryRoute);
+                return new TabuMove(MoveType.INSERT, primaryOrderSchema, primaryRoute);
             case REASSIGN:
-                return new TabuMove(MoveType.REASSIGN, primaryPackage, secondaryRoute, primaryRoute);
+                return new TabuMove(MoveType.REASSIGN, primaryOrderSchema, secondaryRoute, primaryRoute);
             case SWAP:
-                return new TabuMove(MoveType.SWAP, secondaryPackage, secondaryRoute, primaryPackage, primaryRoute);
+                return new TabuMove(MoveType.SWAP, secondaryOrderSchema, secondaryRoute, primaryOrderSchema, primaryRoute);
             default:
                 return null;
         }
@@ -109,22 +109,22 @@ public class TabuMove {
     private int calculateHash() {
         int hash = 7;
         hash = 31 * hash + moveType.hashCode();
-        hash = 31 * hash + (primaryPackage != null ? primaryPackage.getId() : 0);
-        hash = 31 * hash + (secondaryPackage != null ? secondaryPackage.getId() : 0);
+        hash = 31 * hash + (primaryOrderSchema != null ? primaryOrderSchema.getId() : 0);
+        hash = 31 * hash + (secondaryOrderSchema != null ? secondaryOrderSchema.getId() : 0);
         
         // Crear un hash que refleja la estructura de la ruta, no los objetos específicos
         if (primaryRoute != null && !primaryRoute.isEmpty()) {
             int routeHash = 0;
-            for (Flight f : primaryRoute) {
-                routeHash += f.getOriginAirport().getId() * 31 + f.getDestinationAirport().getId();
+            for (FlightSchema f : primaryRoute) {
+                routeHash += f.getOriginAirportSchema().getId() * 31 + f.getDestinationAirportSchema().getId();
             }
             hash = 31 * hash + routeHash;
         }
         
         if (secondaryRoute != null && !secondaryRoute.isEmpty()) {
             int routeHash = 0;
-            for (Flight f : secondaryRoute) {
-                routeHash += f.getOriginAirport().getId() * 31 + f.getDestinationAirport().getId();
+            for (FlightSchema f : secondaryRoute) {
+                routeHash += f.getOriginAirportSchema().getId() * 31 + f.getDestinationAirportSchema().getId();
             }
             hash = 31 * hash + routeHash;
         }
@@ -141,15 +141,15 @@ public class TabuMove {
         
         if (moveType != tabuMove.moveType) return false;
         
-        if (primaryPackage != null && tabuMove.primaryPackage != null) {
-            if (primaryPackage.getId() != tabuMove.primaryPackage.getId()) return false;
-        } else if (primaryPackage != tabuMove.primaryPackage) {
+        if (primaryOrderSchema != null && tabuMove.primaryOrderSchema != null) {
+            if (primaryOrderSchema.getId() != tabuMove.primaryOrderSchema.getId()) return false;
+        } else if (primaryOrderSchema != tabuMove.primaryOrderSchema) {
             return false;
         }
         
-        if (secondaryPackage != null && tabuMove.secondaryPackage != null) {
-            if (secondaryPackage.getId() != tabuMove.secondaryPackage.getId()) return false;
-        } else if (secondaryPackage != tabuMove.secondaryPackage) {
+        if (secondaryOrderSchema != null && tabuMove.secondaryOrderSchema != null) {
+            if (secondaryOrderSchema.getId() != tabuMove.secondaryOrderSchema.getId()) return false;
+        } else if (secondaryOrderSchema != tabuMove.secondaryOrderSchema) {
             return false;
         }
         
@@ -159,17 +159,17 @@ public class TabuMove {
                routesHaveSameStructure(secondaryRoute, tabuMove.secondaryRoute);
     }
     
-    private boolean routesHaveSameStructure(ArrayList<Flight> route1, ArrayList<Flight> route2) {
+    private boolean routesHaveSameStructure(ArrayList<FlightSchema> route1, ArrayList<FlightSchema> route2) {
         if (route1 == null && route2 == null) return true;
         if (route1 == null || route2 == null) return false;
         if (route1.size() != route2.size()) return false;
         
         for (int i = 0; i < route1.size(); i++) {
-            Flight f1 = route1.get(i);
-            Flight f2 = route2.get(i);
+            FlightSchema f1 = route1.get(i);
+            FlightSchema f2 = route2.get(i);
             
-            if (f1.getOriginAirport().getId() != f2.getOriginAirport().getId() ||
-                f1.getDestinationAirport().getId() != f2.getDestinationAirport().getId()) {
+            if (f1.getOriginAirportSchema().getId() != f2.getOriginAirportSchema().getId() ||
+                f1.getDestinationAirportSchema().getId() != f2.getDestinationAirportSchema().getId()) {
                 return false;
             }
         }
@@ -187,10 +187,10 @@ public class TabuMove {
         StringBuilder sb = new StringBuilder();
         sb.append("TabuMove{");
         sb.append(moveType);
-        sb.append(", pkg=").append(primaryPackage != null ? primaryPackage.getId() : "null");
+        sb.append(", pkg=").append(primaryOrderSchema != null ? primaryOrderSchema.getId() : "null");
         
         if (moveType == MoveType.SWAP) {
-            sb.append(", pkg2=").append(secondaryPackage != null ? secondaryPackage.getId() : "null");
+            sb.append(", pkg2=").append(secondaryOrderSchema != null ? secondaryOrderSchema.getId() : "null");
         }
         
         sb.append('}');

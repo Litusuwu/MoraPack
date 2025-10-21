@@ -46,7 +46,7 @@ public class WarehouseService {
     if (patch.getIsMainWarehouse() != null) w.setIsMainWarehouse(patch.getIsMainWarehouse());
     if (patch.getMaxCapacity() != null) w.setMaxCapacity(patch.getMaxCapacity());
     if (patch.getUsedCapacity() != null) w.setUsedCapacity(patch.getUsedCapacity());
-    // airport es lado inverso; se administra desde Airport. No reasignar aquí.
+    // airport es lado inverso; se administra desde AirportSchema. No reasignar aquí.
 
     validate(w);
     return warehouseRepository.save(w);

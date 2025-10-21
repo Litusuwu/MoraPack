@@ -22,7 +22,7 @@ public class Solution {
   @OneToMany(mappedBy = "solution", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
   private List<Route> routes;
 
-  // No se mapea directamente un Map<Package, Route>. Úsalo en memoria o modela una entidad intermedia.
+  // No se mapea directamente un Map<OrderSchema, RouteSchema>. Úsalo en memoria o modela una entidad intermedia.
   @Transient
   private Map<Package, Route> packageRouteMap;
 

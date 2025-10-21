@@ -1,11 +1,9 @@
 package com.system.morapack.schemas.algorithm.TabuSearch;
 
-import com.system.morapack.schemas.Airport;
-import com.system.morapack.schemas.City;
-import com.system.morapack.schemas.Flight;
-import com.system.morapack.schemas.Package;
-import com.system.morapack.schemas.Product;
+import com.system.morapack.schemas.*;
+import com.system.morapack.schemas.AirportSchema;
 import com.system.morapack.config.Constants;
+import com.system.morapack.schemas.OrderSchema;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -18,15 +16,15 @@ import java.time.temporal.ChronoUnit;
  * Incluye métodos para aplicar movimientos y evaluar soluciones
  */
 public class TabuSolution {
-    private HashMap<Package, ArrayList<Flight>> solution;
-    private ArrayList<Package> allPackages;
-    private ArrayList<Package> unassignedPackages;
-    private ArrayList<Package> originalPackages; // Paquetes originales antes de unitizar
-    private ArrayList<Airport> airports;
-    private ArrayList<Flight> flights;
-    private Map<String, Airport> cityToAirportMap;
-    private HashMap<Airport, Integer> warehouseOccupancy;
-    private HashMap<Airport, int[]> temporalWarehouseOccupancy; // Validación temporal minuto-a-minuto
+    private HashMap<OrderSchema, ArrayList<FlightSchema>> solution;
+    private ArrayList<OrderSchema> allOrderSchemas;
+    private ArrayList<OrderSchema> unassignedOrderSchemas;
+    private ArrayList<OrderSchema> originalOrderSchemas; // Paquetes originales antes de unitizar
+    private ArrayList<AirportSchema> airportSchemas;
+    private ArrayList<FlightSchema> flightSchemas;
+    private Map<String, AirportSchema> cityToAirportMap;
+    private HashMap<AirportSchema, Integer> warehouseOccupancy;
+    private HashMap<AirportSchema, int[]> temporalWarehouseOccupancy; // Validación temporal minuto-a-minuto
     private LocalDateTime T0; // Ancla temporal para cálculos consistentes
     private int score;
     private boolean scoreOutdated;
@@ -34,11 +32,11 @@ public class TabuSolution {
     /**
      * Constructor que inicializa una solución vacía
      */
-    public TabuSolution(ArrayList<Package> allPackages, ArrayList<Airport> airports, ArrayList<Flight> flights) {
+    public TabuSolution(ArrayList<OrderSchema> allOrderSchemas, ArrayList<AirportSchema> airportSchemas, ArrayList<FlightSchema> flightSchemas) {
         this.solution = new HashMap<>();
-        this.originalPackages = new ArrayList<>(allPackages);
-        this.airports = airports;
-        this.flights = flights;
+        this.originalOrderSchemas = new ArrayList<>(allOrderSchemas);
+        this.airportSchemas = airportSchemas;
+        this.flightSchemas = flightSchemas;
         this.cityToAirportMap = buildCityToAirportMap();
         this.warehouseOccupancy = new HashMap<>();
         this.temporalWarehouseOccupancy = new HashMap<>();
@@ -46,15 +44,15 @@ public class TabuSolution {
         
         // Aplicar unitización si está habilitada
         if (Constants.ENABLE_PRODUCT_UNITIZATION) {
-            this.allPackages = expandPackagesToProductUnits(this.originalPackages);
-            System.out.println("UNITIZACIÓN APLICADA: " + this.originalPackages.size() + 
-                             " paquetes originales → " + this.allPackages.size() + " unidades de producto");
+            this.allOrderSchemas = expandPackagesToProductUnits(this.originalOrderSchemas);
+            System.out.println("UNITIZACIÓN APLICADA: " + this.originalOrderSchemas.size() +
+                             " paquetes originales → " + this.allOrderSchemas.size() + " unidades de producto");
         } else {
-            this.allPackages = new ArrayList<>(allPackages);
+            this.allOrderSchemas = new ArrayList<>(allOrderSchemas);
             System.out.println("UNITIZACIÓN DESHABILITADA: Usando paquetes originales");
         }
         
-        this.unassignedPackages = new ArrayList<>(this.allPackages);
+        this.unassignedOrderSchemas = new ArrayList<>(this.allOrderSchemas);
         
         initializeWarehouseOccupancy();
         initializeTemporalWarehouseOccupancy();
@@ -68,18 +66,18 @@ public class TabuSolution {
         this.solution = new HashMap<>();
         
         // Copiar solución
-        for (Map.Entry<Package, ArrayList<Flight>> entry : other.solution.entrySet()) {
-            Package pkg = entry.getKey();
-            ArrayList<Flight> route = entry.getValue();
+        for (Map.Entry<OrderSchema, ArrayList<FlightSchema>> entry : other.solution.entrySet()) {
+            OrderSchema pkg = entry.getKey();
+            ArrayList<FlightSchema> route = entry.getValue();
             this.solution.put(pkg, new ArrayList<>(route));
         }
         
         // Copiar otras estructuras
-        this.allPackages = new ArrayList<>(other.allPackages);
-        this.unassignedPackages = new ArrayList<>(other.unassignedPackages);
-        this.originalPackages = new ArrayList<>(other.originalPackages);
-        this.airports = other.airports;
-        this.flights = other.flights;
+        this.allOrderSchemas = new ArrayList<>(other.allOrderSchemas);
+        this.unassignedOrderSchemas = new ArrayList<>(other.unassignedOrderSchemas);
+        this.originalOrderSchemas = new ArrayList<>(other.originalOrderSchemas);
+        this.airportSchemas = other.airportSchemas;
+        this.flightSchemas = other.flightSchemas;
         this.cityToAirportMap = other.cityToAirportMap;
         this.T0 = other.T0;
         
@@ -88,7 +86,7 @@ public class TabuSolution {
         
         // Copiar ocupación temporal de almacenes
         this.temporalWarehouseOccupancy = new HashMap<>();
-        for (Map.Entry<Airport, int[]> entry : other.temporalWarehouseOccupancy.entrySet()) {
+        for (Map.Entry<AirportSchema, int[]> entry : other.temporalWarehouseOccupancy.entrySet()) {
             this.temporalWarehouseOccupancy.put(entry.getKey(), entry.getValue().clone());
         }
         
@@ -104,11 +102,11 @@ public class TabuSolution {
     /**
      * Crea un mapa de nombres de ciudad a aeropuertos
      */
-    private Map<String, Airport> buildCityToAirportMap() {
-        Map<String, Airport> map = new HashMap<>();
-        for (Airport airport : airports) {
-            if (airport.getCity() != null && airport.getCity().getName() != null) {
-                map.put(airport.getCity().getName().toLowerCase().trim(), airport);
+    private Map<String, AirportSchema> buildCityToAirportMap() {
+        Map<String, AirportSchema> map = new HashMap<>();
+        for (AirportSchema airportSchema : airportSchemas) {
+            if (airportSchema.getCitySchema() != null && airportSchema.getCitySchema().getName() != null) {
+                map.put(airportSchema.getCitySchema().getName().toLowerCase().trim(), airportSchema);
             }
         }
         return map;
@@ -118,8 +116,8 @@ public class TabuSolution {
      * Inicializa la ocupación de almacenes
      */
     private void initializeWarehouseOccupancy() {
-        for (Airport airport : airports) {
-            warehouseOccupancy.put(airport, 0);
+        for (AirportSchema airportSchema : airportSchemas) {
+            warehouseOccupancy.put(airportSchema, 0);
         }
     }
     
@@ -128,8 +126,8 @@ public class TabuSolution {
      */
     private void initializeTemporalWarehouseOccupancy() {
         final int TOTAL_MINUTES = Constants.HORIZON_DAYS * 24 * 60; // 4 días = 5760 minutos
-        for (Airport airport : airports) {
-            temporalWarehouseOccupancy.put(airport, new int[TOTAL_MINUTES]);
+        for (AirportSchema airportSchema : airportSchemas) {
+            temporalWarehouseOccupancy.put(airportSchema, new int[TOTAL_MINUTES]);
         }
     }
     
@@ -144,22 +142,22 @@ public class TabuSolution {
      * UNITIZACIÓN: Expande paquetes en unidades de producto individuales
      * Permite dividir productos de un paquete entre múltiples vuelos
      */
-    private ArrayList<Package> expandPackagesToProductUnits(ArrayList<Package> originalPackages) {
-        ArrayList<Package> productUnits = new ArrayList<>();
+    private ArrayList<OrderSchema> expandPackagesToProductUnits(ArrayList<OrderSchema> originalOrderSchemas) {
+        ArrayList<OrderSchema> productUnits = new ArrayList<>();
         
-        for (Package originalPkg : originalPackages) {
+        for (OrderSchema originalPkg : originalOrderSchemas) {
             // Validar origen desde sedes principales si está habilitado
             if (Constants.VALIDATE_HEADQUARTERS_ORIGIN && !isValidOrigin(originalPkg)) {
                 System.out.println("ADVERTENCIA: Paquete " + originalPkg.getId() + " no se origina desde una sede principal de MoraPack");
                 continue; // Saltar paquetes que no se originen desde sedes válidas
             }
             
-            int productCount = (originalPkg.getProducts() != null && !originalPkg.getProducts().isEmpty()) 
-                             ? originalPkg.getProducts().size() : 1;
+            int productCount = (originalPkg.getProductSchemas() != null && !originalPkg.getProductSchemas().isEmpty())
+                             ? originalPkg.getProductSchemas().size() : 1;
             
             // Crear una unidad por cada producto
             for (int i = 0; i < productCount; i++) {
-                Package unit = createPackageUnit(originalPkg, i);
+                OrderSchema unit = createPackageUnit(originalPkg, i);
                 productUnits.add(unit);
             }
         }
@@ -170,29 +168,29 @@ public class TabuSolution {
     /**
      * Crea una unidad de producto individual a partir de un paquete original
      */
-    private Package createPackageUnit(Package originalPkg, int productIndex) {
-        Package unit = new Package();
+    private OrderSchema createPackageUnit(OrderSchema originalPkg, int productIndex) {
+        OrderSchema unit = new OrderSchema();
         String unitIdString = originalPkg.getId() + "_UNIT_" + productIndex;
         unit.setId(unitIdString.hashCode()); // Convertir string a int usando hashCode
-        unit.setCustomer(originalPkg.getCustomer());
+        unit.setCustomerSchema(originalPkg.getCustomerSchema());
         unit.setCurrentLocation(originalPkg.getCurrentLocation());
-        unit.setDestinationCity(originalPkg.getDestinationCity());
+        unit.setDestinationCitySchema(originalPkg.getDestinationCitySchema());
         unit.setOrderDate(originalPkg.getOrderDate());
         unit.setDeliveryDeadline(originalPkg.getDeliveryDeadline());
         unit.setPriority(originalPkg.getPriority());
         
         // Crear lista con un solo producto
-        ArrayList<Product> singleProduct = new ArrayList<>();
-        if (originalPkg.getProducts() != null && originalPkg.getProducts().size() > productIndex) {
-            singleProduct.add(originalPkg.getProducts().get(productIndex));
+        ArrayList<ProductSchema> singleProductSchema = new ArrayList<>();
+        if (originalPkg.getProductSchemas() != null && originalPkg.getProductSchemas().size() > productIndex) {
+            singleProductSchema.add(originalPkg.getProductSchemas().get(productIndex));
         } else {
             // Crear producto genérico si no existe
-            Product genericProduct = new Product();
+            ProductSchema genericProductSchema = new ProductSchema();
             String productIdString = "MPE_" + originalPkg.getId() + "_" + productIndex;
-            genericProduct.setId(productIdString.hashCode()); // Convertir string a int
-            singleProduct.add(genericProduct);
+            genericProductSchema.setId(productIdString.hashCode()); // Convertir string a int
+            singleProductSchema.add(genericProductSchema);
         }
-        unit.setProducts(singleProduct);
+        unit.setProductSchemas(singleProductSchema);
         
         return unit;
     }
@@ -201,7 +199,7 @@ public class TabuSolution {
      * Valida que un paquete se origine desde una sede principal de MoraPack
      * (Lima, Bruselas o Baku según especificación)
      */
-    private boolean isValidOrigin(Package pkg) {
+    private boolean isValidOrigin(OrderSchema pkg) {
         if (pkg.getCurrentLocation() == null || pkg.getCurrentLocation().getName() == null) {
             return false;
         }
@@ -221,14 +219,14 @@ public class TabuSolution {
      * - Mismo continente: 0.5 días (12 horas)
      * - Diferente continente: 1 día (24 horas)
      */
-    private boolean validatePACKTransportTimes(Flight flight) {
-        if (flight.getOriginAirport() == null || flight.getDestinationAirport() == null ||
-            flight.getOriginAirport().getCity() == null || flight.getDestinationAirport().getCity() == null) {
+    private boolean validatePACKTransportTimes(FlightSchema flightSchema) {
+        if (flightSchema.getOriginAirportSchema() == null || flightSchema.getDestinationAirportSchema() == null ||
+            flightSchema.getOriginAirportSchema().getCitySchema() == null || flightSchema.getDestinationAirportSchema().getCitySchema() == null) {
             return false;
         }
         
-        boolean sameContinentFlight = flight.getOriginAirport().getCity().getContinent() == 
-                                     flight.getDestinationAirport().getCity().getContinent();
+        boolean sameContinentFlight = flightSchema.getOriginAirportSchema().getCitySchema().getContinent() ==
+                                     flightSchema.getDestinationAirportSchema().getCitySchema().getContinent();
         
         double expectedTime = sameContinentFlight ? 
                              Constants.SAME_CONTINENT_TRANSPORT_TIME * 24.0 : // 12 horas
@@ -236,7 +234,7 @@ public class TabuSolution {
         
         // Permitir variación del ±10% en los tiempos
         double tolerance = expectedTime * 0.1;
-        double actualTime = flight.getTransportTime();
+        double actualTime = flightSchema.getTransportTime();
         
         return Math.abs(actualTime - expectedTime) <= tolerance;
     }
@@ -245,13 +243,13 @@ public class TabuSolution {
      * Añade ocupación temporal al almacén de un aeropuerto
      * Implementa la regla de liberación después de 2 horas en destino
      */
-    private boolean addTemporalOccupancy(Airport airport, int startMinute, int durationMinutes, int productCount) {
-        if (airport == null || airport.getWarehouse() == null) {
+    private boolean addTemporalOccupancy(AirportSchema airportSchema, int startMinute, int durationMinutes, int productCount) {
+        if (airportSchema == null || airportSchema.getWarehouse() == null) {
             return false;
         }
         
-        int[] occupancyArray = temporalWarehouseOccupancy.get(airport);
-        int maxCapacity = airport.getWarehouse().getMaxCapacity();
+        int[] occupancyArray = temporalWarehouseOccupancy.get(airportSchema);
+        int maxCapacity = airportSchema.getWarehouse().getMaxCapacity();
         
         // Verificar y agregar ocupación para cada minuto del período
         final int TOTAL_MINUTES = Constants.HORIZON_DAYS * 24 * 60;
@@ -276,7 +274,7 @@ public class TabuSolution {
     /**
      * Calcula el tiempo de inicio de un paquete en minutos desde T0
      */
-    private int getPackageStartTime(Package pkg) {
+    private int getPackageStartTime(OrderSchema pkg) {
         if (pkg.getOrderDate() == null || T0 == null) {
             return 0; // Tiempo por defecto
         }
@@ -291,40 +289,40 @@ public class TabuSolution {
     /**
      * Valida el flujo temporal completo de un paquete respetando capacidades minuto-a-minuto
      */
-    private boolean validateSinglePackageTemporalFlow(Package pkg, ArrayList<Flight> route) {
+    private boolean validateSinglePackageTemporalFlow(OrderSchema pkg, ArrayList<FlightSchema> route) {
         if (pkg == null) {
             return false;
         }
         
         if (route == null || route.isEmpty()) {
             // El paquete ya está en destino, cliente tiene 2 horas para recoger
-            Airport destinationAirport = getAirportByCity(pkg.getDestinationCity().getName());
-            int productCount = pkg.getProducts() != null ? pkg.getProducts().size() : 1;
+            AirportSchema destinationAirportSchema = getAirportByCity(pkg.getDestinationCitySchema().getName());
+            int productCount = pkg.getProductSchemas() != null ? pkg.getProductSchemas().size() : 1;
             int startMinute = getPackageStartTime(pkg);
-            return addTemporalOccupancy(destinationAirport, startMinute, Constants.CUSTOMER_PICKUP_MAX_HOURS * 60, productCount);
+            return addTemporalOccupancy(destinationAirportSchema, startMinute, Constants.CUSTOMER_PICKUP_MAX_HOURS * 60, productCount);
         }
         
         int currentMinute = getPackageStartTime(pkg);
-        int productCount = pkg.getProducts() != null ? pkg.getProducts().size() : 1;
+        int productCount = pkg.getProductSchemas() != null ? pkg.getProductSchemas().size() : 1;
         
         for (int i = 0; i < route.size(); i++) {
-            Flight flight = route.get(i);
-            Airport departureAirport = flight.getOriginAirport();
-            Airport arrivalAirport = flight.getDestinationAirport();
+            FlightSchema flightSchema = route.get(i);
+            AirportSchema departureAirportSchema = flightSchema.getOriginAirportSchema();
+            AirportSchema arrivalAirportSchema = flightSchema.getDestinationAirportSchema();
             
             // Validar tiempos de transporte PACK
-            if (!validatePACKTransportTimes(flight)) {
-                System.out.println("ADVERTENCIA: Vuelo " + flight.getId() + " no respeta tiempos PACK");
+            if (!validatePACKTransportTimes(flightSchema)) {
+                System.out.println("ADVERTENCIA: Vuelo " + flightSchema.getId() + " no respeta tiempos PACK");
             }
             
             // FASE 1: El paquete está en el aeropuerto de origen esperando el vuelo
             int waitingTime = Constants.PRE_FLIGHT_PROCESSING_MINUTES;
-            if (!addTemporalOccupancy(departureAirport, currentMinute, waitingTime, productCount)) {
+            if (!addTemporalOccupancy(departureAirportSchema, currentMinute, waitingTime, productCount)) {
                 return false;
             }
             
             // FASE 2: Vuelo en progreso (el paquete no ocupa almacén durante el vuelo)
-            int flightDurationMinutes = (int)(flight.getTransportTime() * 60);
+            int flightDurationMinutes = (int)(flightSchema.getTransportTime() * 60);
             currentMinute += waitingTime + flightDurationMinutes;
             
             // FASE 3: El paquete llega al aeropuerto de destino
@@ -337,7 +335,7 @@ public class TabuSolution {
                 stayDuration = Constants.CUSTOMER_PICKUP_MAX_HOURS * 60;
             }
             
-            if (stayDuration > 0 && !addTemporalOccupancy(arrivalAirport, arrivalMinute, stayDuration, productCount)) {
+            if (stayDuration > 0 && !addTemporalOccupancy(arrivalAirportSchema, arrivalMinute, stayDuration, productCount)) {
                 return false;
             }
             
@@ -378,8 +376,8 @@ public class TabuSolution {
     /**
      * Inserta un paquete en la solución
      */
-    private boolean insertPackage(Package pkg, ArrayList<Flight> route) {
-        if (pkg == null || !unassignedPackages.contains(pkg)) {
+    private boolean insertPackage(OrderSchema pkg, ArrayList<FlightSchema> route) {
+        if (pkg == null || !unassignedOrderSchemas.contains(pkg)) {
             return false;
         }
         
@@ -389,14 +387,14 @@ public class TabuSolution {
         }
         
         // Verificar capacidad de vuelos
-        int productCount = pkg.getProducts() != null ? pkg.getProducts().size() : 1;
+        int productCount = pkg.getProductSchemas() != null ? pkg.getProductSchemas().size() : 1;
         if (!checkFlightCapacity(route, productCount)) {
             return false;
         }
         
         // Verificar capacidad de almacén en destino (validación básica)
-        Airport destinationAirport = getAirportByCity(pkg.getDestinationCity().getName());
-        if (destinationAirport == null || !checkWarehouseCapacity(destinationAirport, productCount)) {
+        AirportSchema destinationAirportSchema = getAirportByCity(pkg.getDestinationCitySchema().getName());
+        if (destinationAirportSchema == null || !checkWarehouseCapacity(destinationAirportSchema, productCount)) {
             return false;
         }
         
@@ -412,11 +410,11 @@ public class TabuSolution {
         
         // Insertar paquete
         solution.put(pkg, new ArrayList<>(route));
-        unassignedPackages.remove(pkg);
+        unassignedOrderSchemas.remove(pkg);
         
         // Actualizar capacidades básicas
         updateFlightCapacities(route, productCount);
-        updateWarehouseOccupancy(destinationAirport, productCount);
+        updateWarehouseOccupancy(destinationAirportSchema, productCount);
         
         // Marcar score como desactualizado
         scoreOutdated = true;
@@ -427,25 +425,25 @@ public class TabuSolution {
     /**
      * Elimina un paquete de la solución
      */
-    private boolean removePackage(Package pkg) {
+    private boolean removePackage(OrderSchema pkg) {
         if (pkg == null || !solution.containsKey(pkg)) {
             return false;
         }
         
         // Obtener ruta actual
-        ArrayList<Flight> route = solution.get(pkg);
-        int productCount = pkg.getProducts() != null ? pkg.getProducts().size() : 1;
+        ArrayList<FlightSchema> route = solution.get(pkg);
+        int productCount = pkg.getProductSchemas() != null ? pkg.getProductSchemas().size() : 1;
         
         // Eliminar paquete
         solution.remove(pkg);
-        unassignedPackages.add(pkg);
+        unassignedOrderSchemas.add(pkg);
         
         // Actualizar capacidades
         updateFlightCapacities(route, -productCount);
         
-        Airport destinationAirport = getAirportByCity(pkg.getDestinationCity().getName());
-        if (destinationAirport != null) {
-            updateWarehouseOccupancy(destinationAirport, -productCount);
+        AirportSchema destinationAirportSchema = getAirportByCity(pkg.getDestinationCitySchema().getName());
+        if (destinationAirportSchema != null) {
+            updateWarehouseOccupancy(destinationAirportSchema, -productCount);
         }
         
         // Marcar score como desactualizado
@@ -457,14 +455,14 @@ public class TabuSolution {
     /**
      * Reasigna un paquete a una nueva ruta
      */
-    private boolean reassignPackage(Package pkg, ArrayList<Flight> newRoute) {
+    private boolean reassignPackage(OrderSchema pkg, ArrayList<FlightSchema> newRoute) {
         if (pkg == null || !solution.containsKey(pkg)) {
             return false;
         }
         
         // Obtener ruta actual
-        ArrayList<Flight> oldRoute = solution.get(pkg);
-        int productCount = pkg.getProducts() != null ? pkg.getProducts().size() : 1;
+        ArrayList<FlightSchema> oldRoute = solution.get(pkg);
+        int productCount = pkg.getProductSchemas() != null ? pkg.getProductSchemas().size() : 1;
         
         // Verificar capacidad de vuelos en la nueva ruta
         if (!checkFlightCapacity(newRoute, productCount)) {
@@ -491,22 +489,22 @@ public class TabuSolution {
     /**
      * Intercambia rutas entre dos paquetes
      */
-    private boolean swapPackages(Package pkg1, Package pkg2) {
+    private boolean swapPackages(OrderSchema pkg1, OrderSchema pkg2) {
         if (pkg1 == null || pkg2 == null || 
             !solution.containsKey(pkg1) || !solution.containsKey(pkg2)) {
             return false;
         }
         
         // Obtener rutas actuales
-        ArrayList<Flight> route1 = solution.get(pkg1);
-        ArrayList<Flight> route2 = solution.get(pkg2);
+        ArrayList<FlightSchema> route1 = solution.get(pkg1);
+        ArrayList<FlightSchema> route2 = solution.get(pkg2);
         
-        int productCount1 = pkg1.getProducts() != null ? pkg1.getProducts().size() : 1;
-        int productCount2 = pkg2.getProducts() != null ? pkg2.getProducts().size() : 1;
+        int productCount1 = pkg1.getProductSchemas() != null ? pkg1.getProductSchemas().size() : 1;
+        int productCount2 = pkg2.getProductSchemas() != null ? pkg2.getProductSchemas().size() : 1;
         
         // Verificar capacidad de vuelos después del intercambio
-        ArrayList<Flight> tempRoute1 = new ArrayList<>(route1);
-        ArrayList<Flight> tempRoute2 = new ArrayList<>(route2);
+        ArrayList<FlightSchema> tempRoute1 = new ArrayList<>(route1);
+        ArrayList<FlightSchema> tempRoute2 = new ArrayList<>(route2);
         
         // Liberar capacidad actual
         updateFlightCapacities(route1, -productCount1);
@@ -540,14 +538,14 @@ public class TabuSolution {
     /**
      * Verifica si hay capacidad suficiente en los vuelos
      */
-    private boolean checkFlightCapacity(ArrayList<Flight> route, int productCount) {
+    private boolean checkFlightCapacity(ArrayList<FlightSchema> route, int productCount) {
         if (route == null || route.isEmpty()) {
             return true; // No hay vuelos, por lo que no hay restricción de capacidad
         }
         
-        for (Flight flight : route) {
-            int currentUsage = flight.getUsedCapacity();
-            if (currentUsage + productCount > flight.getMaxCapacity()) {
+        for (FlightSchema flightSchema : route) {
+            int currentUsage = flightSchema.getUsedCapacity();
+            if (currentUsage + productCount > flightSchema.getMaxCapacity()) {
                 return false;
             }
         }
@@ -558,38 +556,38 @@ public class TabuSolution {
     /**
      * Verifica si hay capacidad suficiente en el almacén
      */
-    private boolean checkWarehouseCapacity(Airport airport, int productCount) {
-        if (airport == null || airport.getWarehouse() == null) {
+    private boolean checkWarehouseCapacity(AirportSchema airportSchema, int productCount) {
+        if (airportSchema == null || airportSchema.getWarehouse() == null) {
             return false;
         }
         
-        int currentOccupancy = warehouseOccupancy.getOrDefault(airport, 0);
-        return (currentOccupancy + productCount) <= airport.getWarehouse().getMaxCapacity();
+        int currentOccupancy = warehouseOccupancy.getOrDefault(airportSchema, 0);
+        return (currentOccupancy + productCount) <= airportSchema.getWarehouse().getMaxCapacity();
     }
     
     /**
      * Actualiza la capacidad utilizada en los vuelos
      */
-    private void updateFlightCapacities(ArrayList<Flight> route, int productCount) {
+    private void updateFlightCapacities(ArrayList<FlightSchema> route, int productCount) {
         if (route == null || route.isEmpty()) {
             return;
         }
         
-        for (Flight flight : route) {
-            flight.setUsedCapacity(flight.getUsedCapacity() + productCount);
+        for (FlightSchema flightSchema : route) {
+            flightSchema.setUsedCapacity(flightSchema.getUsedCapacity() + productCount);
         }
     }
     
     /**
      * Actualiza la ocupación de almacén
      */
-    private void updateWarehouseOccupancy(Airport airport, int productCount) {
-        if (airport == null) {
+    private void updateWarehouseOccupancy(AirportSchema airportSchema, int productCount) {
+        if (airportSchema == null) {
             return;
         }
         
-        int currentOccupancy = warehouseOccupancy.getOrDefault(airport, 0);
-        warehouseOccupancy.put(airport, currentOccupancy + productCount);
+        int currentOccupancy = warehouseOccupancy.getOrDefault(airportSchema, 0);
+        warehouseOccupancy.put(airportSchema, currentOccupancy + productCount);
     }
     
     /**
@@ -617,19 +615,19 @@ public class TabuSolution {
         double totalDeliveryMargin = 0;
         
         // Calcular métricas
-        for (Map.Entry<Package, ArrayList<Flight>> entry : solution.entrySet()) {
-            Package pkg = entry.getKey();
-            ArrayList<Flight> route = entry.getValue();
+        for (Map.Entry<OrderSchema, ArrayList<FlightSchema>> entry : solution.entrySet()) {
+            OrderSchema pkg = entry.getKey();
+            ArrayList<FlightSchema> route = entry.getValue();
             
             // Contar productos
-            int packageProducts = pkg.getProducts() != null ? pkg.getProducts().size() : 1;
+            int packageProducts = pkg.getProductSchemas() != null ? pkg.getProductSchemas().size() : 1;
             totalProducts += packageProducts;
             
             // Tiempo total de la ruta
             double routeTime = 0;
-            for (Flight flight : route) {
-                routeTime += flight.getTransportTime();
-                totalCapacityUtilization += (double) flight.getUsedCapacity() / flight.getMaxCapacity();
+            for (FlightSchema flightSchema : route) {
+                routeTime += flightSchema.getTransportTime();
+                totalCapacityUtilization += (double) flightSchema.getUsedCapacity() / flightSchema.getMaxCapacity();
                 totalFlightsUsed++;
             }
             
@@ -704,7 +702,7 @@ public class TabuSolution {
      * Verifica si se respeta el deadline de un paquete con una ruta
      * Incluye validación de promesas MoraPack y deadlines del cliente
      */
-    private boolean isDeadlineRespected(Package pkg, ArrayList<Flight> route) {
+    private boolean isDeadlineRespected(OrderSchema pkg, ArrayList<FlightSchema> route) {
         if (pkg == null || pkg.getOrderDate() == null || pkg.getDeliveryDeadline() == null) {
             return false;
         }
@@ -712,11 +710,11 @@ public class TabuSolution {
         double totalTime = 0;
         
         // Calcular tiempo total de la ruta
-        for (Flight flight : route) {
-            totalTime += flight.getTransportTime();
+        for (FlightSchema flightSchema : route) {
+            totalTime += flightSchema.getTransportTime();
             
             // Validar que cada vuelo respete los tiempos PACK
-            if (!validatePACKTransportTimes(flight)) {
+            if (!validatePACKTransportTimes(flightSchema)) {
                 return false; // Vuelo no válido según estándares PACK
             }
         }
@@ -746,9 +744,9 @@ public class TabuSolution {
      * - Mismo continente: máximo 2 días (48 horas)
      * - Diferentes continentes: máximo 3 días (72 horas)
      */
-    private boolean validateMoraPackDeliveryPromise(Package pkg, double totalTimeHours) {
-        City origin = pkg.getCurrentLocation();
-        City destination = pkg.getDestinationCity();
+    private boolean validateMoraPackDeliveryPromise(OrderSchema pkg, double totalTimeHours) {
+        CitySchema origin = pkg.getCurrentLocation();
+        CitySchema destination = pkg.getDestinationCitySchema();
         
         if (origin == null || destination == null) {
             return false;
@@ -772,9 +770,9 @@ public class TabuSolution {
     /**
      * Calcula un margen de seguridad basado en la complejidad de la ruta
      */
-    private double calculateSafetyMargin(Package pkg, ArrayList<Flight> route) {
-        City origin = pkg.getCurrentLocation();
-        City destination = pkg.getDestinationCity();
+    private double calculateSafetyMargin(OrderSchema pkg, ArrayList<FlightSchema> route) {
+        CitySchema origin = pkg.getCurrentLocation();
+        CitySchema destination = pkg.getDestinationCitySchema();
         boolean sameContinentRoute = (origin != null && destination != null) &&
                                     origin.getContinent() == destination.getContinent();
         
@@ -797,12 +795,12 @@ public class TabuSolution {
         int differentContinentOneStop = 0;
         int inefficientRoutes = 0;
         
-        for (Map.Entry<Package, ArrayList<Flight>> entry : solution.entrySet()) {
-            Package pkg = entry.getKey();
-            ArrayList<Flight> route = entry.getValue();
+        for (Map.Entry<OrderSchema, ArrayList<FlightSchema>> entry : solution.entrySet()) {
+            OrderSchema pkg = entry.getKey();
+            ArrayList<FlightSchema> route = entry.getValue();
             
             boolean sameContinentRoute = pkg.getCurrentLocation().getContinent() == 
-                                        pkg.getDestinationCity().getContinent();
+                                        pkg.getDestinationCitySchema().getContinent();
             
             if (route.isEmpty()) continue;
             
@@ -835,12 +833,12 @@ public class TabuSolution {
         double totalUtilization = 0.0;
         int validWarehouses = 0;
         
-        for (Map.Entry<Airport, Integer> entry : warehouseOccupancy.entrySet()) {
-            Airport airport = entry.getKey();
+        for (Map.Entry<AirportSchema, Integer> entry : warehouseOccupancy.entrySet()) {
+            AirportSchema airportSchema = entry.getKey();
             int occupancy = entry.getValue();
             
-            if (airport.getWarehouse() != null && airport.getWarehouse().getMaxCapacity() > 0) {
-                double utilization = (double) occupancy / airport.getWarehouse().getMaxCapacity();
+            if (airportSchema.getWarehouse() != null && airportSchema.getWarehouse().getMaxCapacity() > 0) {
+                double utilization = (double) occupancy / airportSchema.getWarehouse().getMaxCapacity();
                 totalUtilization += utilization;
                 validWarehouses++;
             }
@@ -857,15 +855,15 @@ public class TabuSolution {
         
         double totalComplexity = 0.0;
         
-        for (Map.Entry<Package, ArrayList<Flight>> entry : solution.entrySet()) {
-            Package pkg = entry.getKey();
-            ArrayList<Flight> route = entry.getValue();
+        for (Map.Entry<OrderSchema, ArrayList<FlightSchema>> entry : solution.entrySet()) {
+            OrderSchema pkg = entry.getKey();
+            ArrayList<FlightSchema> route = entry.getValue();
             
             if (route.isEmpty()) continue;
             
             // Penalizar rutas con más escalas de las necesarias
             boolean sameContinentRoute = pkg.getCurrentLocation().getContinent() == 
-                                        pkg.getDestinationCity().getContinent();
+                                        pkg.getDestinationCitySchema().getContinent();
             
             int expectedMaxStops = sameContinentRoute ? 1 : 2; // 1 para mismo continente, 2 para diferentes
             
@@ -875,8 +873,8 @@ public class TabuSolution {
             
             // Penalizar vuelos con baja utilización en rutas largas
             if (route.size() > 1) {
-                for (Flight flight : route) {
-                    double utilization = (double) flight.getUsedCapacity() / flight.getMaxCapacity();
+                for (FlightSchema flightSchema : route) {
+                    double utilization = (double) flightSchema.getUsedCapacity() / flightSchema.getMaxCapacity();
                     if (utilization < 0.3) { // Vuelos con menos del 30% de utilización
                         totalComplexity += 1.0;
                     }
@@ -890,7 +888,7 @@ public class TabuSolution {
     /**
      * Obtiene el aeropuerto por el nombre de la ciudad
      */
-    private Airport getAirportByCity(String cityName) {
+    private AirportSchema getAirportByCity(String cityName) {
         if (cityName == null) return null;
         return cityToAirportMap.get(cityName.toLowerCase().trim());
     }
@@ -898,12 +896,12 @@ public class TabuSolution {
     /**
      * Getters y setters
      */
-    public HashMap<Package, ArrayList<Flight>> getSolution() {
+    public HashMap<OrderSchema, ArrayList<FlightSchema>> getSolution() {
         return solution;
     }
     
-    public ArrayList<Package> getUnassignedPackages() {
-        return unassignedPackages;
+    public ArrayList<OrderSchema> getUnassignedPackages() {
+        return unassignedOrderSchemas;
     }
     
     public int getAssignedPackagesCount() {
@@ -911,7 +909,7 @@ public class TabuSolution {
     }
     
     public int getUnassignedPackagesCount() {
-        return unassignedPackages.size();
+        return unassignedOrderSchemas.size();
     }
     
     public int getScore() {

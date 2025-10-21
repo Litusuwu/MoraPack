@@ -14,7 +14,7 @@ public class AccountService {
 
   public Account getAccount(Integer id) {
     return accountRepository.findById(id)
-        .orElseThrow(() -> new EntityNotFoundException("Account not found with id: " + id));
+        .orElseThrow(() -> new EntityNotFoundException("AccountSchema not found with id: " + id));
   }
 
   public List<Account> fetchAccounts(List<Integer> ids) {
@@ -39,7 +39,7 @@ public class AccountService {
 
   public void deleteAccount(Integer id) {
     if (!accountRepository.existsById(id))
-      throw new EntityNotFoundException("Account not found with id: " + id);
+      throw new EntityNotFoundException("AccountSchema not found with id: " + id);
     accountRepository.deleteById(id);
   }
 

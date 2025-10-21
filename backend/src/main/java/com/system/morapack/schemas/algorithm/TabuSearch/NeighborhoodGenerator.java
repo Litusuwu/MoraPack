@@ -1,8 +1,8 @@
 package com.system.morapack.schemas.algorithm.TabuSearch;
 
-import com.system.morapack.schemas.Airport;
-import com.system.morapack.schemas.Flight;
-import com.system.morapack.schemas.Package;
+import com.system.morapack.schemas.AirportSchema;
+import com.system.morapack.schemas.FlightSchema;
+import com.system.morapack.schemas.OrderSchema;
 import com.system.morapack.config.Constants;
 
 import java.util.ArrayList;
@@ -17,15 +17,15 @@ import java.time.temporal.ChronoUnit;
  * Genera movimientos vecinos para explorar el espacio de soluciones
  */
 public class NeighborhoodGenerator {
-    private final ArrayList<Flight> flights;
-    private final ArrayList<Airport> airports;
-    private final Map<String, Airport> cityToAirportMap;
+    private final ArrayList<FlightSchema> flightSchemas;
+    private final ArrayList<AirportSchema> airportSchemas;
+    private final Map<String, AirportSchema> cityToAirportMap;
     private final Random random;
     private final int maxNeighborhoodSize;
     
-    public NeighborhoodGenerator(ArrayList<Flight> flights, ArrayList<Airport> airports, Map<String, Airport> cityToAirportMap, int maxNeighborhoodSize) {
-        this.flights = flights;
-        this.airports = airports;
+    public NeighborhoodGenerator(ArrayList<FlightSchema> flightSchemas, ArrayList<AirportSchema> airportSchemas, Map<String, AirportSchema> cityToAirportMap, int maxNeighborhoodSize) {
+        this.flightSchemas = flightSchemas;
+        this.airportSchemas = airportSchemas;
         this.cityToAirportMap = cityToAirportMap;
         this.random = new Random();
         this.maxNeighborhoodSize = maxNeighborhoodSize;
@@ -34,22 +34,22 @@ public class NeighborhoodGenerator {
     /**
      * Genera movimientos de inserción para paquetes no asignados
      */
-    public List<TabuMove> generateInsertMoves(HashMap<Package, ArrayList<Flight>> currentSolution, List<Package> unassignedPackages, int maxMoves) {
+    public List<TabuMove> generateInsertMoves(HashMap<OrderSchema, ArrayList<FlightSchema>> currentSolution, List<OrderSchema> unassignedOrderSchemas, int maxMoves) {
         List<TabuMove> moves = new ArrayList<>();
         
         // Limitar el número de paquetes a considerar para inserción
-        List<Package> candidatePackages = new ArrayList<>(unassignedPackages);
-        if (candidatePackages.size() > maxMoves) {
-            Collections.shuffle(candidatePackages, random);
-            candidatePackages = candidatePackages.subList(0, maxMoves);
+        List<OrderSchema> candidateOrderSchemas = new ArrayList<>(unassignedOrderSchemas);
+        if (candidateOrderSchemas.size() > maxMoves) {
+            Collections.shuffle(candidateOrderSchemas, random);
+            candidateOrderSchemas = candidateOrderSchemas.subList(0, maxMoves);
         }
         
-        for (Package pkg : candidatePackages) {
+        for (OrderSchema pkg : candidateOrderSchemas) {
             // Buscar una ruta viable para este paquete
-            ArrayList<ArrayList<Flight>> candidateRoutes = findViableRoutes(pkg, currentSolution);
+            ArrayList<ArrayList<FlightSchema>> candidateRoutes = findViableRoutes(pkg, currentSolution);
             
             // Si encontramos rutas, crear movimientos de inserción
-            for (ArrayList<Flight> route : candidateRoutes) {
+            for (ArrayList<FlightSchema> route : candidateRoutes) {
                 moves.add(new TabuMove(TabuMove.MoveType.INSERT, pkg, route));
                 
                 // Limitar el número total de movimientos
@@ -65,19 +65,19 @@ public class NeighborhoodGenerator {
     /**
      * Genera movimientos de eliminación para paquetes ya asignados
      */
-    public List<TabuMove> generateRemoveMoves(HashMap<Package, ArrayList<Flight>> currentSolution, int maxMoves) {
+    public List<TabuMove> generateRemoveMoves(HashMap<OrderSchema, ArrayList<FlightSchema>> currentSolution, int maxMoves) {
         List<TabuMove> moves = new ArrayList<>();
         
         // Limitar el número de paquetes a considerar para eliminación
-        List<Package> candidatePackages = new ArrayList<>(currentSolution.keySet());
-        if (candidatePackages.size() > maxMoves) {
-            Collections.shuffle(candidatePackages, random);
-            candidatePackages = candidatePackages.subList(0, maxMoves);
+        List<OrderSchema> candidateOrderSchemas = new ArrayList<>(currentSolution.keySet());
+        if (candidateOrderSchemas.size() > maxMoves) {
+            Collections.shuffle(candidateOrderSchemas, random);
+            candidateOrderSchemas = candidateOrderSchemas.subList(0, maxMoves);
         }
         
-        for (Package pkg : candidatePackages) {
+        for (OrderSchema pkg : candidateOrderSchemas) {
             // Crear un movimiento de eliminación
-            ArrayList<Flight> route = currentSolution.get(pkg);
+            ArrayList<FlightSchema> route = currentSolution.get(pkg);
             moves.add(new TabuMove(TabuMove.MoveType.REMOVE, pkg, route));
             
             // Limitar el número total de movimientos
@@ -92,23 +92,23 @@ public class NeighborhoodGenerator {
     /**
      * Genera movimientos de reasignación para paquetes ya asignados
      */
-    public List<TabuMove> generateReassignMoves(HashMap<Package, ArrayList<Flight>> currentSolution, int maxMoves) {
+    public List<TabuMove> generateReassignMoves(HashMap<OrderSchema, ArrayList<FlightSchema>> currentSolution, int maxMoves) {
         List<TabuMove> moves = new ArrayList<>();
         
         // Limitar el número de paquetes a considerar para reasignación
-        List<Package> candidatePackages = new ArrayList<>(currentSolution.keySet());
-        if (candidatePackages.size() > maxMoves) {
-            Collections.shuffle(candidatePackages, random);
-            candidatePackages = candidatePackages.subList(0, maxMoves);
+        List<OrderSchema> candidateOrderSchemas = new ArrayList<>(currentSolution.keySet());
+        if (candidateOrderSchemas.size() > maxMoves) {
+            Collections.shuffle(candidateOrderSchemas, random);
+            candidateOrderSchemas = candidateOrderSchemas.subList(0, maxMoves);
         }
         
-        for (Package pkg : candidatePackages) {
-            ArrayList<Flight> currentRoute = currentSolution.get(pkg);
+        for (OrderSchema pkg : candidateOrderSchemas) {
+            ArrayList<FlightSchema> currentRoute = currentSolution.get(pkg);
             
             // Buscar rutas alternativas
-            ArrayList<ArrayList<Flight>> alternativeRoutes = findAlternativeRoutes(pkg, currentRoute, currentSolution);
+            ArrayList<ArrayList<FlightSchema>> alternativeRoutes = findAlternativeRoutes(pkg, currentRoute, currentSolution);
             
-            for (ArrayList<Flight> newRoute : alternativeRoutes) {
+            for (ArrayList<FlightSchema> newRoute : alternativeRoutes) {
                 // Crear un movimiento de reasignación
                 moves.add(new TabuMove(TabuMove.MoveType.REASSIGN, pkg, currentRoute, newRoute));
                 
@@ -125,33 +125,33 @@ public class NeighborhoodGenerator {
     /**
      * Genera movimientos de intercambio entre dos paquetes
      */
-    public List<TabuMove> generateSwapMoves(HashMap<Package, ArrayList<Flight>> currentSolution, int maxMoves) {
+    public List<TabuMove> generateSwapMoves(HashMap<OrderSchema, ArrayList<FlightSchema>> currentSolution, int maxMoves) {
         List<TabuMove> moves = new ArrayList<>();
         
-        List<Package> assignedPackages = new ArrayList<>(currentSolution.keySet());
-        if (assignedPackages.size() < 2) {
+        List<OrderSchema> assignedOrderSchemas = new ArrayList<>(currentSolution.keySet());
+        if (assignedOrderSchemas.size() < 2) {
             return moves; // No hay suficientes paquetes para intercambiar
         }
         
         // Limitar el número de intercambios a considerar
-        int totalPossibleSwaps = assignedPackages.size() * (assignedPackages.size() - 1) / 2;
+        int totalPossibleSwaps = assignedOrderSchemas.size() * (assignedOrderSchemas.size() - 1) / 2;
         int swapsToCheck = Math.min(maxMoves, totalPossibleSwaps);
         
         // Generar pares aleatorios de paquetes para intercambiar
         for (int i = 0; i < swapsToCheck; i++) {
             // Seleccionar dos paquetes aleatorios diferentes
-            int idx1 = random.nextInt(assignedPackages.size());
+            int idx1 = random.nextInt(assignedOrderSchemas.size());
             int idx2;
             do {
-                idx2 = random.nextInt(assignedPackages.size());
+                idx2 = random.nextInt(assignedOrderSchemas.size());
             } while (idx1 == idx2);
             
-            Package pkg1 = assignedPackages.get(idx1);
-            Package pkg2 = assignedPackages.get(idx2);
+            OrderSchema pkg1 = assignedOrderSchemas.get(idx1);
+            OrderSchema pkg2 = assignedOrderSchemas.get(idx2);
             
             // Verificar si las rutas son intercambiables
-            ArrayList<Flight> route1 = currentSolution.get(pkg1);
-            ArrayList<Flight> route2 = currentSolution.get(pkg2);
+            ArrayList<FlightSchema> route1 = currentSolution.get(pkg1);
+            ArrayList<FlightSchema> route2 = currentSolution.get(pkg2);
             
             if (isRouteValidForPackage(pkg2, route1) && isRouteValidForPackage(pkg1, route2)) {
                 // Crear un movimiento de intercambio
@@ -174,12 +174,12 @@ public class NeighborhoodGenerator {
         List<TabuMove> neighborhood = new ArrayList<>();
         
         // Obtener la solución actual y paquetes no asignados
-        HashMap<Package, ArrayList<Flight>> currentSolution = solution.getSolution();
-        List<Package> unassignedPackages = solution.getUnassignedPackages();
+        HashMap<OrderSchema, ArrayList<FlightSchema>> currentSolution = solution.getSolution();
+        List<OrderSchema> unassignedOrderSchemas = solution.getUnassignedPackages();
         
         // Limitar el número de movimientos a generar por tipo
         int solutionSize = currentSolution.size();
-        int unassignedSize = unassignedPackages.size();
+        int unassignedSize = unassignedOrderSchemas.size();
         
         // Calcular proporción de cada tipo de movimiento
         int maxInserts = Math.min(30, unassignedSize);
@@ -188,7 +188,7 @@ public class NeighborhoodGenerator {
         int maxSwaps = Math.min(30, solutionSize);
         
         // Generar cada tipo de movimiento
-        List<TabuMove> insertMoves = generateInsertMoves(currentSolution, unassignedPackages, maxInserts);
+        List<TabuMove> insertMoves = generateInsertMoves(currentSolution, unassignedOrderSchemas, maxInserts);
         List<TabuMove> removeMoves = generateRemoveMoves(currentSolution, maxRemoves);
         List<TabuMove> reassignMoves = generateReassignMoves(currentSolution, maxReassigns);
         List<TabuMove> swapMoves = generateSwapMoves(currentSolution, maxSwaps);
@@ -213,18 +213,18 @@ public class NeighborhoodGenerator {
     /**
      * Encuentra rutas viables para un paquete no asignado
      */
-    private ArrayList<ArrayList<Flight>> findViableRoutes(Package pkg, HashMap<Package, ArrayList<Flight>> currentSolution) {
-        ArrayList<ArrayList<Flight>> viableRoutes = new ArrayList<>();
+    private ArrayList<ArrayList<FlightSchema>> findViableRoutes(OrderSchema pkg, HashMap<OrderSchema, ArrayList<FlightSchema>> currentSolution) {
+        ArrayList<ArrayList<FlightSchema>> viableRoutes = new ArrayList<>();
         
         // 1. Intentar rutas directas
-        ArrayList<Flight> directRoute = findDirectRoute(pkg);
+        ArrayList<FlightSchema> directRoute = findDirectRoute(pkg);
         if (directRoute != null && isRouteValidWithSolution(pkg, directRoute, currentSolution)) {
             viableRoutes.add(directRoute);
         }
         
         // 2. Intentar rutas con una escala
-        ArrayList<ArrayList<Flight>> oneStopRoutes = findOneStopRoutes(pkg);
-        for (ArrayList<Flight> route : oneStopRoutes) {
+        ArrayList<ArrayList<FlightSchema>> oneStopRoutes = findOneStopRoutes(pkg);
+        for (ArrayList<FlightSchema> route : oneStopRoutes) {
             if (isRouteValidWithSolution(pkg, route, currentSolution)) {
                 viableRoutes.add(route);
                 
@@ -237,8 +237,8 @@ public class NeighborhoodGenerator {
         
         // 3. Intentar rutas con dos escalas (si es necesario)
         if (viableRoutes.isEmpty()) {
-            ArrayList<ArrayList<Flight>> twoStopRoutes = findTwoStopRoutes(pkg);
-            for (ArrayList<Flight> route : twoStopRoutes) {
+            ArrayList<ArrayList<FlightSchema>> twoStopRoutes = findTwoStopRoutes(pkg);
+            for (ArrayList<FlightSchema> route : twoStopRoutes) {
                 if (isRouteValidWithSolution(pkg, route, currentSolution)) {
                     viableRoutes.add(route);
                     
@@ -256,21 +256,21 @@ public class NeighborhoodGenerator {
     /**
      * Encuentra rutas alternativas para un paquete ya asignado
      */
-    private ArrayList<ArrayList<Flight>> findAlternativeRoutes(Package pkg, ArrayList<Flight> currentRoute, HashMap<Package, ArrayList<Flight>> currentSolution) {
-        ArrayList<ArrayList<Flight>> alternativeRoutes = new ArrayList<>();
+    private ArrayList<ArrayList<FlightSchema>> findAlternativeRoutes(OrderSchema pkg, ArrayList<FlightSchema> currentRoute, HashMap<OrderSchema, ArrayList<FlightSchema>> currentSolution) {
+        ArrayList<ArrayList<FlightSchema>> alternativeRoutes = new ArrayList<>();
         
         // Generar rutas alternativas
-        ArrayList<ArrayList<Flight>> allPossibleRoutes = new ArrayList<>();
+        ArrayList<ArrayList<FlightSchema>> allPossibleRoutes = new ArrayList<>();
         
         // Intentar rutas directas
-        ArrayList<Flight> directRoute = findDirectRoute(pkg);
+        ArrayList<FlightSchema> directRoute = findDirectRoute(pkg);
         if (directRoute != null && !directRoute.equals(currentRoute)) {
             allPossibleRoutes.add(directRoute);
         }
         
         // Intentar rutas con una escala
-        ArrayList<ArrayList<Flight>> oneStopRoutes = findOneStopRoutes(pkg);
-        for (ArrayList<Flight> route : oneStopRoutes) {
+        ArrayList<ArrayList<FlightSchema>> oneStopRoutes = findOneStopRoutes(pkg);
+        for (ArrayList<FlightSchema> route : oneStopRoutes) {
             if (!route.equals(currentRoute)) {
                 allPossibleRoutes.add(route);
             }
@@ -278,8 +278,8 @@ public class NeighborhoodGenerator {
         
         // Intentar rutas con dos escalas (limitado)
         if (allPossibleRoutes.size() < 3) {
-            ArrayList<ArrayList<Flight>> twoStopRoutes = findTwoStopRoutes(pkg);
-            for (ArrayList<Flight> route : twoStopRoutes) {
+            ArrayList<ArrayList<FlightSchema>> twoStopRoutes = findTwoStopRoutes(pkg);
+            for (ArrayList<FlightSchema> route : twoStopRoutes) {
                 if (!route.equals(currentRoute)) {
                     allPossibleRoutes.add(route);
                     
@@ -291,9 +291,9 @@ public class NeighborhoodGenerator {
         }
         
         // Verificar validez de las rutas alternativas
-        for (ArrayList<Flight> route : allPossibleRoutes) {
+        for (ArrayList<FlightSchema> route : allPossibleRoutes) {
             // Crear una copia de la solución actual con el paquete reasignado para validar
-            HashMap<Package, ArrayList<Flight>> tempSolution = new HashMap<>(currentSolution);
+            HashMap<OrderSchema, ArrayList<FlightSchema>> tempSolution = new HashMap<>(currentSolution);
             tempSolution.put(pkg, route);
             
             if (isRouteValidWithSolution(pkg, route, tempSolution)) {
@@ -312,21 +312,21 @@ public class NeighborhoodGenerator {
     /**
      * Encuentra una ruta directa para un paquete
      */
-    private ArrayList<Flight> findDirectRoute(Package pkg) {
-        Airport originAirport = getAirportByCity(pkg.getCurrentLocation().getName());
-        Airport destAirport = getAirportByCity(pkg.getDestinationCity().getName());
+    private ArrayList<FlightSchema> findDirectRoute(OrderSchema pkg) {
+        AirportSchema originAirportSchema = getAirportByCity(pkg.getCurrentLocation().getName());
+        AirportSchema destAirportSchema = getAirportByCity(pkg.getDestinationCitySchema().getName());
         
-        if (originAirport == null || destAirport == null) {
+        if (originAirportSchema == null || destAirportSchema == null) {
             return null;
         }
         
         // Buscar un vuelo directo
-        for (Flight flight : flights) {
-            if (flight.getOriginAirport().equals(originAirport) && 
-                flight.getDestinationAirport().equals(destAirport)) {
+        for (FlightSchema flightSchema : flightSchemas) {
+            if (flightSchema.getOriginAirportSchema().equals(originAirportSchema) &&
+                flightSchema.getDestinationAirportSchema().equals(destAirportSchema)) {
                 
-                ArrayList<Flight> route = new ArrayList<>();
-                route.add(flight);
+                ArrayList<FlightSchema> route = new ArrayList<>();
+                route.add(flightSchema);
                 return route;
             }
         }
@@ -337,57 +337,57 @@ public class NeighborhoodGenerator {
     /**
      * Encuentra rutas con una escala para un paquete
      */
-    private ArrayList<ArrayList<Flight>> findOneStopRoutes(Package pkg) {
-        ArrayList<ArrayList<Flight>> routes = new ArrayList<>();
-        Airport originAirport = getAirportByCity(pkg.getCurrentLocation().getName());
-        Airport destAirport = getAirportByCity(pkg.getDestinationCity().getName());
+    private ArrayList<ArrayList<FlightSchema>> findOneStopRoutes(OrderSchema pkg) {
+        ArrayList<ArrayList<FlightSchema>> routes = new ArrayList<>();
+        AirportSchema originAirportSchema = getAirportByCity(pkg.getCurrentLocation().getName());
+        AirportSchema destAirportSchema = getAirportByCity(pkg.getDestinationCitySchema().getName());
         
-        if (originAirport == null || destAirport == null) {
+        if (originAirportSchema == null || destAirportSchema == null) {
             return routes;
         }
         
         // Buscar intermedios potenciales
-        List<Airport> intermediates = new ArrayList<>(airports);
+        List<AirportSchema> intermediates = new ArrayList<>(airportSchemas);
         Collections.shuffle(intermediates, random);
         
         // Limitar búsqueda a un número razonable de intermedios
         int maxIntermediates = Math.min(10, intermediates.size());
         
         for (int i = 0; i < maxIntermediates; i++) {
-            Airport intermediate = intermediates.get(i);
+            AirportSchema intermediate = intermediates.get(i);
             
             // Evitar usar origen o destino como intermedio
-            if (intermediate.equals(originAirport) || intermediate.equals(destAirport)) {
+            if (intermediate.equals(originAirportSchema) || intermediate.equals(destAirportSchema)) {
                 continue;
             }
             
-            Flight firstLeg = null;
-            Flight secondLeg = null;
+            FlightSchema firstLeg = null;
+            FlightSchema secondLeg = null;
             
             // Buscar primer tramo
-            for (Flight flight : flights) {
-                if (flight.getOriginAirport().equals(originAirport) && 
-                    flight.getDestinationAirport().equals(intermediate)) {
+            for (FlightSchema flightSchema : flightSchemas) {
+                if (flightSchema.getOriginAirportSchema().equals(originAirportSchema) &&
+                    flightSchema.getDestinationAirportSchema().equals(intermediate)) {
                     
-                    firstLeg = flight;
+                    firstLeg = flightSchema;
                     break;
                 }
             }
             
             // Si encontramos primer tramo, buscar segundo tramo
             if (firstLeg != null) {
-                for (Flight flight : flights) {
-                    if (flight.getOriginAirport().equals(intermediate) && 
-                        flight.getDestinationAirport().equals(destAirport)) {
+                for (FlightSchema flightSchema : flightSchemas) {
+                    if (flightSchema.getOriginAirportSchema().equals(intermediate) &&
+                        flightSchema.getDestinationAirportSchema().equals(destAirportSchema)) {
                         
-                        secondLeg = flight;
+                        secondLeg = flightSchema;
                         break;
                     }
                 }
                 
                 // Si encontramos ambos tramos, añadir la ruta
                 if (secondLeg != null) {
-                    ArrayList<Flight> route = new ArrayList<>();
+                    ArrayList<FlightSchema> route = new ArrayList<>();
                     route.add(firstLeg);
                     route.add(secondLeg);
                     routes.add(route);
@@ -406,38 +406,38 @@ public class NeighborhoodGenerator {
     /**
      * Encuentra rutas con dos escalas para un paquete
      */
-    private ArrayList<ArrayList<Flight>> findTwoStopRoutes(Package pkg) {
-        ArrayList<ArrayList<Flight>> routes = new ArrayList<>();
-        Airport originAirport = getAirportByCity(pkg.getCurrentLocation().getName());
-        Airport destAirport = getAirportByCity(pkg.getDestinationCity().getName());
+    private ArrayList<ArrayList<FlightSchema>> findTwoStopRoutes(OrderSchema pkg) {
+        ArrayList<ArrayList<FlightSchema>> routes = new ArrayList<>();
+        AirportSchema originAirportSchema = getAirportByCity(pkg.getCurrentLocation().getName());
+        AirportSchema destAirportSchema = getAirportByCity(pkg.getDestinationCitySchema().getName());
         
-        if (originAirport == null || destAirport == null) {
+        if (originAirportSchema == null || destAirportSchema == null) {
             return routes;
         }
         
         // Buscar intermedios potenciales
-        List<Airport> intermediates = new ArrayList<>(airports);
+        List<AirportSchema> intermediates = new ArrayList<>(airportSchemas);
         Collections.shuffle(intermediates, random);
         
         // Limitar búsqueda a un número razonable de intermedios
         int maxFirstIntermediates = Math.min(5, intermediates.size());
         
         for (int i = 0; i < maxFirstIntermediates; i++) {
-            Airport firstIntermediate = intermediates.get(i);
+            AirportSchema firstIntermediate = intermediates.get(i);
             
             // Evitar usar origen o destino como primer intermedio
-            if (firstIntermediate.equals(originAirport) || firstIntermediate.equals(destAirport)) {
+            if (firstIntermediate.equals(originAirportSchema) || firstIntermediate.equals(destAirportSchema)) {
                 continue;
             }
             
-            Flight firstLeg = null;
+            FlightSchema firstLeg = null;
             
             // Buscar primer tramo
-            for (Flight flight : flights) {
-                if (flight.getOriginAirport().equals(originAirport) && 
-                    flight.getDestinationAirport().equals(firstIntermediate)) {
+            for (FlightSchema flightSchema : flightSchemas) {
+                if (flightSchema.getOriginAirportSchema().equals(originAirportSchema) &&
+                    flightSchema.getDestinationAirportSchema().equals(firstIntermediate)) {
                     
-                    firstLeg = flight;
+                    firstLeg = flightSchema;
                     break;
                 }
             }
@@ -450,43 +450,43 @@ public class NeighborhoodGenerator {
                     // Asegurar que no repetimos intermedios
                     if (i == j) continue;
                     
-                    Airport secondIntermediate = intermediates.get(j);
+                    AirportSchema secondIntermediate = intermediates.get(j);
                     
                     // Evitar usar origen, destino o primer intermedio como segundo intermedio
-                    if (secondIntermediate.equals(originAirport) || 
-                        secondIntermediate.equals(destAirport) ||
+                    if (secondIntermediate.equals(originAirportSchema) ||
+                        secondIntermediate.equals(destAirportSchema) ||
                         secondIntermediate.equals(firstIntermediate)) {
                         continue;
                     }
                     
-                    Flight secondLeg = null;
+                    FlightSchema secondLeg = null;
                     
                     // Buscar segundo tramo
-                    for (Flight flight : flights) {
-                        if (flight.getOriginAirport().equals(firstIntermediate) && 
-                            flight.getDestinationAirport().equals(secondIntermediate)) {
+                    for (FlightSchema flightSchema : flightSchemas) {
+                        if (flightSchema.getOriginAirportSchema().equals(firstIntermediate) &&
+                            flightSchema.getDestinationAirportSchema().equals(secondIntermediate)) {
                             
-                            secondLeg = flight;
+                            secondLeg = flightSchema;
                             break;
                         }
                     }
                     
                     // Si encontramos segundo tramo, buscar tercer tramo
                     if (secondLeg != null) {
-                        Flight thirdLeg = null;
+                        FlightSchema thirdLeg = null;
                         
-                        for (Flight flight : flights) {
-                            if (flight.getOriginAirport().equals(secondIntermediate) && 
-                                flight.getDestinationAirport().equals(destAirport)) {
+                        for (FlightSchema flightSchema : flightSchemas) {
+                            if (flightSchema.getOriginAirportSchema().equals(secondIntermediate) &&
+                                flightSchema.getDestinationAirportSchema().equals(destAirportSchema)) {
                                 
-                                thirdLeg = flight;
+                                thirdLeg = flightSchema;
                                 break;
                             }
                         }
                         
                         // Si encontramos los tres tramos, añadir la ruta
                         if (thirdLeg != null) {
-                            ArrayList<Flight> route = new ArrayList<>();
+                            ArrayList<FlightSchema> route = new ArrayList<>();
                             route.add(firstLeg);
                             route.add(secondLeg);
                             route.add(thirdLeg);
@@ -508,35 +508,35 @@ public class NeighborhoodGenerator {
     /**
      * Verifica si una ruta es válida para un paquete
      */
-    private boolean isRouteValidForPackage(Package pkg, ArrayList<Flight> route) {
+    private boolean isRouteValidForPackage(OrderSchema pkg, ArrayList<FlightSchema> route) {
         if (route == null || route.isEmpty()) {
             // Si no hay ruta, solo es válido si ya está en destino
-            return pkg.getCurrentLocation().getName().equals(pkg.getDestinationCity().getName());
+            return pkg.getCurrentLocation().getName().equals(pkg.getDestinationCitySchema().getName());
         }
         
         // Verificar origen correcto
-        Airport originAirport = getAirportByCity(pkg.getCurrentLocation().getName());
-        if (originAirport == null || !route.get(0).getOriginAirport().equals(originAirport)) {
+        AirportSchema originAirportSchema = getAirportByCity(pkg.getCurrentLocation().getName());
+        if (originAirportSchema == null || !route.get(0).getOriginAirportSchema().equals(originAirportSchema)) {
             return false;
         }
         
         // Verificar destino correcto
-        Airport destAirport = getAirportByCity(pkg.getDestinationCity().getName());
-        if (destAirport == null || !route.get(route.size() - 1).getDestinationAirport().equals(destAirport)) {
+        AirportSchema destAirportSchema = getAirportByCity(pkg.getDestinationCitySchema().getName());
+        if (destAirportSchema == null || !route.get(route.size() - 1).getDestinationAirportSchema().equals(destAirportSchema)) {
             return false;
         }
         
         // Verificar continuidad de la ruta
         for (int i = 0; i < route.size() - 1; i++) {
-            if (!route.get(i).getDestinationAirport().equals(route.get(i + 1).getOriginAirport())) {
+            if (!route.get(i).getDestinationAirportSchema().equals(route.get(i + 1).getOriginAirportSchema())) {
                 return false;
             }
         }
         
         // Verificar tiempo de entrega
         double totalTime = 0;
-        for (Flight flight : route) {
-            totalTime += flight.getTransportTime();
+        for (FlightSchema flightSchema : route) {
+            totalTime += flightSchema.getTransportTime();
         }
         
         // Agregar tiempo de conexión entre vuelos
@@ -546,7 +546,7 @@ public class NeighborhoodGenerator {
         
         // Verificar cumplimiento de deadlines según continente (promesas MoraPack)
         boolean sameContinentRoute = pkg.getCurrentLocation().getContinent() == 
-                                    pkg.getDestinationCity().getContinent();
+                                    pkg.getDestinationCitySchema().getContinent();
         double maxHours = sameContinentRoute ? 
                          Constants.SAME_CONTINENT_MAX_DELIVERY_TIME * 24.0 : 
                          Constants.DIFFERENT_CONTINENT_MAX_DELIVERY_TIME * 24.0;
@@ -567,39 +567,39 @@ public class NeighborhoodGenerator {
     /**
      * Verifica si una ruta es válida en el contexto de la solución actual
      */
-    private boolean isRouteValidWithSolution(Package pkg, ArrayList<Flight> route, HashMap<Package, ArrayList<Flight>> solution) {
+    private boolean isRouteValidWithSolution(OrderSchema pkg, ArrayList<FlightSchema> route, HashMap<OrderSchema, ArrayList<FlightSchema>> solution) {
         if (!isRouteValidForPackage(pkg, route)) {
             return false;
         }
         
         // Verificar capacidad de vuelos
-        int productCount = pkg.getProducts() != null ? pkg.getProducts().size() : 1;
+        int productCount = pkg.getProductSchemas() != null ? pkg.getProductSchemas().size() : 1;
         
         // Simular asignación para verificar capacidades
-        HashMap<Flight, Integer> flightUsage = new HashMap<>();
+        HashMap<FlightSchema, Integer> flightUsage = new HashMap<>();
         
         // Inicializar con el uso actual
-        for (Map.Entry<Package, ArrayList<Flight>> entry : solution.entrySet()) {
-            Package existingPkg = entry.getKey();
-            ArrayList<Flight> existingRoute = entry.getValue();
+        for (Map.Entry<OrderSchema, ArrayList<FlightSchema>> entry : solution.entrySet()) {
+            OrderSchema existingPkg = entry.getKey();
+            ArrayList<FlightSchema> existingRoute = entry.getValue();
             
             // Saltarse el paquete actual si está siendo reasignado
             if (existingPkg.equals(pkg)) {
                 continue;
             }
             
-            int existingProductCount = existingPkg.getProducts() != null ? 
-                                     existingPkg.getProducts().size() : 1;
+            int existingProductCount = existingPkg.getProductSchemas() != null ?
+                                     existingPkg.getProductSchemas().size() : 1;
             
-            for (Flight flight : existingRoute) {
-                flightUsage.put(flight, flightUsage.getOrDefault(flight, 0) + existingProductCount);
+            for (FlightSchema flightSchema : existingRoute) {
+                flightUsage.put(flightSchema, flightUsage.getOrDefault(flightSchema, 0) + existingProductCount);
             }
         }
         
         // Verificar si la nueva ruta respeta las capacidades
-        for (Flight flight : route) {
-            int newUsage = flightUsage.getOrDefault(flight, 0) + productCount;
-            if (newUsage > flight.getMaxCapacity()) {
+        for (FlightSchema flightSchema : route) {
+            int newUsage = flightUsage.getOrDefault(flightSchema, 0) + productCount;
+            if (newUsage > flightSchema.getMaxCapacity()) {
                 return false;
             }
         }
@@ -612,7 +612,7 @@ public class NeighborhoodGenerator {
     /**
      * Obtiene el aeropuerto por el nombre de la ciudad
      */
-    private Airport getAirportByCity(String cityName) {
+    private AirportSchema getAirportByCity(String cityName) {
         if (cityName == null) return null;
         return cityToAirportMap.get(cityName.toLowerCase().trim());
     }

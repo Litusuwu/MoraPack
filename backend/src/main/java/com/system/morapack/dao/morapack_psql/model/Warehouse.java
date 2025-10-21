@@ -17,8 +17,8 @@ public class Warehouse {
   @Column(name = "id", nullable = false)
   private Integer id;
 
-  // Relación bidireccional con Airport.
-  // Airport es el lado propietario con @JoinColumn(name = "warehouse_id")
+  // Relación bidireccional con AirportSchema.
+  // AirportSchema es el lado propietario con @JoinColumn(name = "warehouse_id")
   @OneToOne(mappedBy = "warehouse", fetch = FetchType.LAZY)
   private Airport airport;
 

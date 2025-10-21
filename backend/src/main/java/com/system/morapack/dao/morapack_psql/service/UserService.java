@@ -17,7 +17,7 @@ public class UserService {
 
   public User getUser(Integer id) {
     return userRepository.findById(id)
-        .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + id));
+        .orElseThrow(() -> new EntityNotFoundException("UserSchema not found with id: " + id));
   }
 
   public List<User> fetchUsers(List<Integer> ids) {
@@ -29,7 +29,7 @@ public class UserService {
 
   public User createUser(User user) {
     if (userRepository.existsByNameAndLastName(user.getName(), user.getLastName())) {
-      throw new IllegalArgumentException("User already exists: " + user.getName() + " " + user.getLastName());
+      throw new IllegalArgumentException("UserSchema already exists: " + user.getName() + " " + user.getLastName());
     }
     return userRepository.save(user);
   }
@@ -53,7 +53,7 @@ public class UserService {
 
   public void deleteUser(Integer id) {
     if (!userRepository.existsById(id)) {
-      throw new EntityNotFoundException("User not found with id: " + id);
+      throw new EntityNotFoundException("UserSchema not found with id: " + id);
     }
     userRepository.deleteById(id);
   }

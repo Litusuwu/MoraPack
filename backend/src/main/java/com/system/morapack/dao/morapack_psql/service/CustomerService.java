@@ -17,7 +17,7 @@ public class CustomerService {
 
   public Customer getCustomer(Integer id) {
     return customerRepository.findById(id)
-        .orElseThrow(() -> new EntityNotFoundException("Customer not found with id: " + id));
+        .orElseThrow(() -> new EntityNotFoundException("CustomerSchema not found with id: " + id));
   }
 
   public List<Customer> fetchCustomers(List<Integer> ids) {
@@ -49,7 +49,7 @@ public class CustomerService {
 
   public void deleteCustomer(Integer id) {
     if (!customerRepository.existsById(id)) {
-      throw new EntityNotFoundException("Customer not found with id: " + id);
+      throw new EntityNotFoundException("CustomerSchema not found with id: " + id);
     }
     customerRepository.deleteById(id);
   }

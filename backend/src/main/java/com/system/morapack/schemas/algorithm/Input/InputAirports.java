@@ -11,19 +11,19 @@ import java.util.Map;
 
 public class InputAirports {
 
-    private ArrayList<Airport> airports;
+    private ArrayList<AirportSchema> airportSchemas;
     private final String filePath;
 
     public InputAirports(String filePath) {
         this.filePath = filePath;
-        this.airports = new ArrayList<>();
+        this.airportSchemas = new ArrayList<>();
     }
 
-    public ArrayList<Airport> readAirports() {
+    public ArrayList<AirportSchema> readAirports() {
         try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
             String line;
             Continent currentContinent = null;
-            Map<String, City> cityMap = new HashMap<>();
+            Map<String, CitySchema> cityMap = new HashMap<>();
 
             // Skip the first two lines (header)
             reader.readLine();
@@ -64,7 +64,7 @@ public class InputAirports {
                     int id = Integer.parseInt(parts[0]);
                     String codeIATA = parts[1];
                     
-                    // Extract city name (may contain multiple words)
+                    // Extract citySchema name (may contain multiple words)
                     int cityNameEnd = 3;
                     while (!parts[cityNameEnd].contains("GMT") && !Character.isDigit(parts[cityNameEnd].charAt(0))) {
                         cityNameEnd++;
@@ -125,18 +125,18 @@ public class InputAirports {
                         longitudeStr = longitudeStr.replaceAll("[°'\"NSEW]", "").trim();
                     }
                     
-                    // Create City object if it doesn't exist
+                    // Create CitySchema object if it doesn't exist
                     String cityKey = cityName + "-" + countryName;
-                    City city = cityMap.get(cityKey);
-                    if (city == null) {
-                        city = new City();
-                        city.setId(cityMap.size() + 1);
-                        city.setName(cityName);
-                        city.setContinent(currentContinent);
-                        cityMap.put(cityKey, city);
+                    CitySchema citySchema = cityMap.get(cityKey);
+                    if (citySchema == null) {
+                        citySchema = new CitySchema();
+                        citySchema.setId(cityMap.size() + 1);
+                        citySchema.setName(cityName);
+                        citySchema.setContinent(currentContinent);
+                        cityMap.put(cityKey, citySchema);
                     }
                     
-                    // Create Warehouse for the airport
+                    // Create Warehouse for the airportSchema
                     Warehouse warehouse = new Warehouse();
                     warehouse.setId(id);
                     warehouse.setMaxCapacity((int)maxCapacity);
@@ -144,22 +144,22 @@ public class InputAirports {
                     warehouse.setName(cityName + " Warehouse");
                     warehouse.setMainWarehouse(false);
                     
-                    // Create Airport object
-                    Airport airport = new Airport();
-                    airport.setId(id);
-                    airport.setCodeIATA(codeIATA);
-                    airport.setAlias(alias);
-                    airport.setTimezoneUTC(timezone);
-                    airport.setLatitude(latitudeStr);
-                    airport.setLongitude(longitudeStr);
-                    airport.setCity(city);
-                    airport.setState(AirportState.Avaiable);
-                    airport.setWarehouse(warehouse);
+                    // Create AirportSchema object
+                    AirportSchema airportSchema = new AirportSchema();
+                    airportSchema.setId(id);
+                    airportSchema.setCodeIATA(codeIATA);
+                    airportSchema.setAlias(alias);
+                    airportSchema.setTimezoneUTC(timezone);
+                    airportSchema.setLatitude(latitudeStr);
+                    airportSchema.setLongitude(longitudeStr);
+                    airportSchema.setCitySchema(citySchema);
+                    airportSchema.setState(AirportState.Avaiable);
+                    airportSchema.setWarehouse(warehouse);
                     
                     // Set circular reference
-                    warehouse.setAirport(airport);
+                    warehouse.setAirportSchema(airportSchema);
                     
-                    airports.add(airport);
+                    airportSchemas.add(airportSchema);
                 }
             }
             
@@ -168,6 +168,6 @@ public class InputAirports {
             e.printStackTrace();
         }
         
-        return airports;
+        return airportSchemas;
     }
 }

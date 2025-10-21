@@ -1,13 +1,8 @@
 package com.system.morapack.schemas.algorithm.Input;
 
-import com.system.morapack.schemas.Airport;
-import com.system.morapack.schemas.City;
-import com.system.morapack.schemas.Continent;
-import com.system.morapack.schemas.Customer;
-import com.system.morapack.schemas.Package;
-import com.system.morapack.schemas.PackageStatus;
-import com.system.morapack.schemas.Product;
-import com.system.morapack.schemas.Status;
+import com.system.morapack.schemas.*;
+import com.system.morapack.schemas.AirportSchema;
+import com.system.morapack.schemas.OrderSchema;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -20,29 +15,29 @@ import java.util.Map;
 import java.util.Random;
 
 public class InputProducts {
-    private ArrayList<Package> packages;
+    private ArrayList<OrderSchema> orderSchemas;
     private final String filePath;
-    private ArrayList<Airport> airports;
-    private Map<String, Airport> airportMap;
+    private ArrayList<AirportSchema> airportSchemas;
+    private Map<String, AirportSchema> airportMap;
     private Random random;
     private int productId = 1;
 
-    public InputProducts(String filePath, ArrayList<Airport> airports) {
+    public InputProducts(String filePath, ArrayList<AirportSchema> airportSchemas) {
         this.filePath = filePath;
-        this.packages = new ArrayList<>();
-        this.airports = airports;
+        this.orderSchemas = new ArrayList<>();
+        this.airportSchemas = airportSchemas;
         this.random = new Random();
         createAirportMap();
     }
 
     private void createAirportMap() {
         this.airportMap = new HashMap<>();
-        for (Airport airport : airports) {
-            airportMap.put(airport.getCodeIATA(), airport);
+        for (AirportSchema airportSchema : airportSchemas) {
+            airportMap.put(airportSchema.getCodeIATA(), airportSchema);
         }
     }
 
-    public ArrayList<Package> readProducts() {
+    public ArrayList<OrderSchema> readProducts() {
         try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
             String line;
             int packageId = 1;
@@ -71,15 +66,15 @@ public class InputProducts {
                     int customerId = Integer.parseInt(parts[5]); // ID del cliente
                     
                     // Find destination airport
-                    Airport destinationAirport = airportMap.get(destinationAirportCode);
+                    AirportSchema destinationAirportSchema = airportMap.get(destinationAirportCode);
                     
-                    if (destinationAirport != null) {
-                        // Create customer
-                        Customer customer = new Customer();
-                        customer.setId(customerId);
-                        customer.setName("Customer " + customerId);
-                        customer.setEmail("customer" + customerId + "@example.com");
-                        customer.setDeliveryCity(destinationAirport.getCity());
+                    if (destinationAirportSchema != null) {
+                        // Create customerSchema
+                        CustomerSchema customerSchema = new CustomerSchema();
+                        customerSchema.setId(customerId);
+                        customerSchema.setName("CustomerSchema " + customerId);
+                        customerSchema.setEmail("customerSchema" + customerId + "@example.com");
+                        customerSchema.setDeliveryCitySchema(destinationAirportSchema.getCitySchema());
                         
                         // Calculate order date and delivery deadline
                         LocalDateTime now = LocalDateTime.now();
@@ -110,34 +105,34 @@ public class InputProducts {
                                 break;
                         }
                         
-                        // Create Package object
-                        Package pkg = new Package();
+                        // Create OrderSchema object
+                        OrderSchema pkg = new OrderSchema();
                         pkg.setId(packageId++);
-                        pkg.setCustomer(customer);
-                        pkg.setDestinationCity(destinationAirport.getCity());
+                        pkg.setCustomerSchema(customerSchema);
+                        pkg.setDestinationCitySchema(destinationAirportSchema.getCitySchema());
                         pkg.setOrderDate(orderDate);
                         pkg.setDeliveryDeadline(deliveryDeadline);
                         pkg.setStatus(PackageStatus.PENDING);
                         
-                        // Create products for this package
-                        ArrayList<Product> products = new ArrayList<>();
+                        // Create productSchemas for this package
+                        ArrayList<ProductSchema> productSchemas = new ArrayList<>();
                         for (int i = 0; i < productQuantity; i++) {
-                            Product product = new Product();
-                            product.setId(productId++);
-                            product.setStatus(Status.NOT_ASSIGNED); // Product not assigned initially
-                            products.add(product);
+                            ProductSchema productSchema = new ProductSchema();
+                            productSchema.setId(productId++);
+                            productSchema.setStatus(Status.NOT_ASSIGNED); // ProductSchema not assigned initially
+                            productSchemas.add(productSchema);
                         }
-                        pkg.setProducts(products);
+                        pkg.setProductSchemas(productSchemas);
                         
                         // Assume the package starts at a random warehouse in a different continent
-                        City currentLocation = getRandomWarehouseLocation(destinationAirport.getCity().getContinent());
+                        CitySchema currentLocation = getRandomWarehouseLocation(destinationAirportSchema.getCitySchema().getContinent());
                         pkg.setCurrentLocation(currentLocation);
                         
                         // Set priority based on delivery time window
                         double priorityValue = calculatePriority(orderDate, deliveryDeadline);
                         pkg.setPriority(priorityValue);
                         
-                        packages.add(pkg);
+                        orderSchemas.add(pkg);
                     }
                 }
             }
@@ -147,38 +142,38 @@ public class InputProducts {
             e.printStackTrace();
         }
         
-        return packages;
+        return orderSchemas;
     }
     
-    private City getRandomWarehouseLocation(Continent destinationContinent) {
+    private CitySchema getRandomWarehouseLocation(Continent destinationContinent) {
         // MoraPack has headquarters in Lima (Peru), Brussels (Belgium), and Baku (Azerbaijan)
         // Packages must start from one of these three locations with unlimited stock
         
-        ArrayList<City> moraPackWarehouses = new ArrayList<>();
+        ArrayList<CitySchema> moraPackWarehouses = new ArrayList<>();
         
         // Find MoraPack warehouse cities
-        for (Airport airport : airports) {
-            City city = airport.getCity();
-            String cityName = city.getName();
+        for (AirportSchema airportSchema : airportSchemas) {
+            CitySchema citySchema = airportSchema.getCitySchema();
+            String cityName = citySchema.getName();
             
             if (cityName.equals("Lima") || cityName.equals("Bruselas") || cityName.equals("Baku") ||
                 cityName.contains("Lima") || cityName.contains("Bruselas") || cityName.contains("Baku")) {
                 // Prefer warehouses in different continent than destination to maximize coverage
-                if (city.getContinent() != destinationContinent) {
-                    moraPackWarehouses.add(city);
+                if (citySchema.getContinent() != destinationContinent) {
+                    moraPackWarehouses.add(citySchema);
                 }
             }
         }
         
         // If no warehouses in different continent, allow any MoraPack warehouse
         if (moraPackWarehouses.isEmpty()) {
-            for (Airport airport : airports) {
-                City city = airport.getCity();
-                String cityName = city.getName();
+            for (AirportSchema airportSchema : airportSchemas) {
+                CitySchema citySchema = airportSchema.getCitySchema();
+                String cityName = citySchema.getName();
                 
                 if (cityName.equals("Lima") || cityName.equals("Bruselas") || cityName.equals("Baku") ||
                     cityName.contains("Lima") || cityName.contains("Bruselas") || cityName.contains("Baku")) {
-                    moraPackWarehouses.add(city);
+                    moraPackWarehouses.add(citySchema);
                 }
             }
         }
@@ -186,9 +181,9 @@ public class InputProducts {
         // If somehow no MoraPack warehouses found (shouldn't happen), fallback to Lima
         if (moraPackWarehouses.isEmpty()) {
             System.err.println("Warning: No MoraPack warehouses found, using fallback");
-            for (Airport airport : airports) {
-                if (airport.getCity().getName().contains("Lima")) {
-                    return airport.getCity();
+            for (AirportSchema airportSchema : airportSchemas) {
+                if (airportSchema.getCitySchema().getName().contains("Lima")) {
+                    return airportSchema.getCitySchema();
                 }
             }
         }

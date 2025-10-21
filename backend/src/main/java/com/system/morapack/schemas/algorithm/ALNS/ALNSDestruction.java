@@ -1,7 +1,7 @@
 package com.system.morapack.schemas.algorithm.ALNS;
 
-import com.system.morapack.schemas.Flight;
-import com.system.morapack.schemas.Package;
+import com.system.morapack.schemas.FlightSchema;
+import com.system.morapack.schemas.OrderSchema;
 import com.system.morapack.config.Constants;
 import com.system.morapack.schemas.Continent;
 import java.util.ArrayList;
@@ -36,23 +36,23 @@ public class ALNSDestruction {
     /**
      * CORRECCIÓN: Helpers para cálculos precisos de slack y productos
      */
-    private static double routeHours(ArrayList<Flight> route) {
+    private static double routeHours(ArrayList<FlightSchema> route) {
         if (route == null || route.isEmpty()) return Double.POSITIVE_INFINITY;
         double h = 0;
-        for (Flight f : route) h += f.getTransportTime();
+        for (FlightSchema f : route) h += f.getTransportTime();
         if (route.size() > 1) h += (route.size() - 1) * 2.0; // conexiones de 2h
         return h;
     }
     
-    private static int productsOf(Package pkg) {
-        return (pkg.getProducts() != null && !pkg.getProducts().isEmpty()) ? pkg.getProducts().size() : 1;
+    private static int productsOf(OrderSchema pkg) {
+        return (pkg.getProductSchemas() != null && !pkg.getProductSchemas().isEmpty()) ? pkg.getProductSchemas().size() : 1;
     }
     
     /**
      * CORRECCIÓN: Slack real - horas disponibles desde orderDate menos horas de la ruta actual
      * REFINAMIENTO: Clampar slack negativo por deadlines raros (deadline < orderDate)
      */
-    private static double slackHours(Package pkg, ArrayList<Flight> route) {
+    private static double slackHours(OrderSchema pkg, ArrayList<FlightSchema> route) {
         long budget = ChronoUnit.HOURS.between(pkg.getOrderDate(), pkg.getDeliveryDeadline());
         // REFINAMIENTO: Clampar budget negativo a 0 para evitar data mala
         if (budget < 0) {
@@ -66,7 +66,7 @@ public class ALNSDestruction {
      * REFINAMIENTO: Verificar si un paquete ya está en destino (ruta null/empty)
      * Estos paquetes no liberan capacidad de vuelo
      */
-    private static boolean isAlreadyAtDestination(ArrayList<Flight> route) {
+    private static boolean isAlreadyAtDestination(ArrayList<FlightSchema> route) {
         return route == null || route.isEmpty();
     }
     
@@ -74,12 +74,12 @@ public class ALNSDestruction {
      * CORRECCIÓN: Destrucción aleatoria mejorada - sesgo por mayor slack y más productos
      */
     public DestructionResult randomDestroy(
-            HashMap<Package, ArrayList<Flight>> currentSolution,
+            HashMap<OrderSchema, ArrayList<FlightSchema>> currentSolution,
             double destructionRate,
             int minDestroy,
             int maxDestroy) {
         
-        HashMap<Package, ArrayList<Flight>> partialSolution = new HashMap<>(currentSolution);
+        HashMap<OrderSchema, ArrayList<FlightSchema>> partialSolution = new HashMap<>(currentSolution);
         
         if (currentSolution.isEmpty()) {
             return new DestructionResult(partialSolution, new ArrayList<>());
@@ -87,14 +87,14 @@ public class ALNSDestruction {
         
         // CORRECCIÓN: Construir lista con score = w1*slack + w2*productos
         class Cand { 
-            Package pkg; 
+            OrderSchema pkg;
             double score; 
         }
         
         ArrayList<Cand> cands = new ArrayList<>();
-        for (Map.Entry<Package, ArrayList<Flight>> e : currentSolution.entrySet()) {
-            Package p = e.getKey();
-            ArrayList<Flight> r = e.getValue();
+        for (Map.Entry<OrderSchema, ArrayList<FlightSchema>> e : currentSolution.entrySet()) {
+            OrderSchema p = e.getKey();
+            ArrayList<FlightSchema> r = e.getValue();
             double slack = slackHours(p, r);
             int prods = productsOf(p);
             
@@ -119,7 +119,7 @@ public class ALNSDestruction {
             Math.min(maxDestroy, currentSolution.size())
         );
         
-        ArrayList<Map.Entry<Package, ArrayList<Flight>>> destroyed = new ArrayList<>();
+        ArrayList<Map.Entry<OrderSchema, ArrayList<FlightSchema>>> destroyed = new ArrayList<>();
         int taken = 0, i = 0;
         
         while (taken < numToDestroy && i < cands.size()) {
@@ -128,8 +128,8 @@ public class ALNSDestruction {
                 i++;
             }
             
-            Package sel = cands.get(i).pkg;
-            ArrayList<Flight> route = currentSolution.get(sel);
+            OrderSchema sel = cands.get(i).pkg;
+            ArrayList<FlightSchema> route = currentSolution.get(sel);
             if (route == null) route = new ArrayList<>(); // Protección contra nulos
             
             destroyed.add(new java.util.AbstractMap.SimpleEntry<>(sel, new ArrayList<>(route)));
@@ -146,24 +146,24 @@ public class ALNSDestruction {
      * Útil para liberar capacidad en rutas intercontinentales.
      */
     public DestructionResult geographicDestroy(
-            HashMap<Package, ArrayList<Flight>> currentSolution,
+            HashMap<OrderSchema, ArrayList<FlightSchema>> currentSolution,
             double destructionRate,
             int minDestroy,
             int maxDestroy) {
         
-        HashMap<Package, ArrayList<Flight>> partialSolution = new HashMap<>(currentSolution);
+        HashMap<OrderSchema, ArrayList<FlightSchema>> partialSolution = new HashMap<>(currentSolution);
         
         if (currentSolution.isEmpty()) {
             return new DestructionResult(partialSolution, new ArrayList<>());
         }
         
         // Contar paquetes por continente (origen y destino)
-        Map<Continent, ArrayList<Package>> packagesByOriginContinent = new HashMap<>();
-        Map<Continent, ArrayList<Package>> packagesByDestinationContinent = new HashMap<>();
+        Map<Continent, ArrayList<OrderSchema>> packagesByOriginContinent = new HashMap<>();
+        Map<Continent, ArrayList<OrderSchema>> packagesByDestinationContinent = new HashMap<>();
         
-        for (Package pkg : currentSolution.keySet()) {
+        for (OrderSchema pkg : currentSolution.keySet()) {
             Continent originContinent = pkg.getCurrentLocation().getContinent();
-            Continent destinationContinent = pkg.getDestinationCity().getContinent();
+            Continent destinationContinent = pkg.getDestinationCitySchema().getContinent();
             
             packagesByOriginContinent.computeIfAbsent(originContinent, k -> new ArrayList<>()).add(pkg);
             packagesByDestinationContinent.computeIfAbsent(destinationContinent, k -> new ArrayList<>()).add(pkg);
@@ -174,11 +174,11 @@ public class ALNSDestruction {
         int maxIntercontinentalPackages = 0;
         
         for (Continent continent : Continent.values()) {
-            ArrayList<Package> originPackages = packagesByOriginContinent.getOrDefault(continent, new ArrayList<>());
+            ArrayList<OrderSchema> originOrderSchemas = packagesByOriginContinent.getOrDefault(continent, new ArrayList<>());
             int intercontinentalCount = 0;
             
-            for (Package pkg : originPackages) {
-                if (pkg.getCurrentLocation().getContinent() != pkg.getDestinationCity().getContinent()) {
+            for (OrderSchema pkg : originOrderSchemas) {
+                if (pkg.getCurrentLocation().getContinent() != pkg.getDestinationCitySchema().getContinent()) {
                     intercontinentalCount++;
                 }
             }
@@ -194,28 +194,28 @@ public class ALNSDestruction {
         }
         
         // Encontrar paquetes del continente seleccionado
-        ArrayList<Package> candidatePackages = new ArrayList<>();
-        for (Package pkg : currentSolution.keySet()) {
+        ArrayList<OrderSchema> candidateOrderSchemas = new ArrayList<>();
+        for (OrderSchema pkg : currentSolution.keySet()) {
             if (pkg.getCurrentLocation().getContinent() == selectedContinent ||
-                pkg.getDestinationCity().getContinent() == selectedContinent) {
-                candidatePackages.add(pkg);
+                pkg.getDestinationCitySchema().getContinent() == selectedContinent) {
+                candidateOrderSchemas.add(pkg);
             }
         }
         
-        if (candidatePackages.size() < minDestroy) {
+        if (candidateOrderSchemas.size() < minDestroy) {
             return randomDestroy(currentSolution, destructionRate, minDestroy, maxDestroy);
         }
         
         int numToDestroy = Math.min(
-            Math.max((int)(candidatePackages.size() * destructionRate), minDestroy),
-            Math.min(maxDestroy, candidatePackages.size())
+            Math.max((int)(candidateOrderSchemas.size() * destructionRate), minDestroy),
+            Math.min(maxDestroy, candidateOrderSchemas.size())
         );
         
-        ArrayList<Map.Entry<Package, ArrayList<Flight>>> destroyedPackages = new ArrayList<>();
+        ArrayList<Map.Entry<OrderSchema, ArrayList<FlightSchema>>> destroyedPackages = new ArrayList<>();
         
         // REFINAMIENTO: Precomputar slack y productos para evitar recalcular en comparator
         class CandidateInfo {
-            Package pkg;
+            OrderSchema pkg;
             boolean intercontinental;
             double slack;
             int products;
@@ -223,12 +223,12 @@ public class ALNSDestruction {
         }
         
         ArrayList<CandidateInfo> candidates = new ArrayList<>();
-        for (Package pkg : candidatePackages) {
+        for (OrderSchema pkg : candidateOrderSchemas) {
             CandidateInfo info = new CandidateInfo();
             info.pkg = pkg;
-            info.intercontinental = pkg.getCurrentLocation().getContinent() != pkg.getDestinationCity().getContinent();
+            info.intercontinental = pkg.getCurrentLocation().getContinent() != pkg.getDestinationCitySchema().getContinent();
             
-            ArrayList<Flight> route = currentSolution.get(pkg);
+            ArrayList<FlightSchema> route = currentSolution.get(pkg);
             info.slack = slackHours(pkg, route);
             info.products = productsOf(pkg);
             info.atDestination = isAlreadyAtDestination(route);
@@ -259,24 +259,24 @@ public class ALNSDestruction {
         });
         
         // Extraer los packages ordenados
-        candidatePackages.clear();
+        candidateOrderSchemas.clear();
         for (CandidateInfo info : candidates) {
-            candidatePackages.add(info.pkg);
+            candidateOrderSchemas.add(info.pkg);
         }
         
         // Seleccionar paquetes con sesgo hacia los intercontinentales
         for (int i = 0; i < numToDestroy; i++) {
-            Package selectedPackage = candidatePackages.get(i);
+            OrderSchema selectedOrderSchema = candidateOrderSchemas.get(i);
             // REFINAMIENTO: Consistencia - usar siempre currentSolution como fuente
-            ArrayList<Flight> route = currentSolution.get(selectedPackage);
+            ArrayList<FlightSchema> route = currentSolution.get(selectedOrderSchema);
             if (route == null) route = new ArrayList<>(); // Protección contra nulos
             
             destroyedPackages.add(new java.util.AbstractMap.SimpleEntry<>(
-                selectedPackage, 
+                    selectedOrderSchema,
                 new ArrayList<>(route)
             ));
             
-            partialSolution.remove(selectedPackage);
+            partialSolution.remove(selectedOrderSchema);
         }
         if (Constants.VERBOSE_LOGGING) {
           System.out.println("Destrucción geográfica: " + numToDestroy + " paquetes eliminados del continente " + selectedContinent);
@@ -289,26 +289,26 @@ public class ALNSDestruction {
      * Útil para rebalancear la carga temporal.
      */
     public DestructionResult timeBasedDestroy(
-            HashMap<Package, ArrayList<Flight>> currentSolution,
+            HashMap<OrderSchema, ArrayList<FlightSchema>> currentSolution,
             double destructionRate,
             int minDestroy,
             int maxDestroy) {
         
-        HashMap<Package, ArrayList<Flight>> partialSolution = new HashMap<>(currentSolution);
+        HashMap<OrderSchema, ArrayList<FlightSchema>> partialSolution = new HashMap<>(currentSolution);
         
         if (currentSolution.isEmpty()) {
             return new DestructionResult(partialSolution, new ArrayList<>());
         }
         
         // CORRECCIÓN: Agrupar por slack real, no por "horas a deadline"
-        ArrayList<Package> lowSlack = new ArrayList<>();    // slack ≤ 8 h (no tocar si es posible)
-        ArrayList<Package> midSlack = new ArrayList<>();    // 8–32 h
-        ArrayList<Package> highSlack = new ArrayList<>();   // > 32 h
-        ArrayList<Package> atDestination = new ArrayList<>(); // REFINAMIENTO: Separar paquetes ya en destino
+        ArrayList<OrderSchema> lowSlack = new ArrayList<>();    // slack ≤ 8 h (no tocar si es posible)
+        ArrayList<OrderSchema> midSlack = new ArrayList<>();    // 8–32 h
+        ArrayList<OrderSchema> highSlack = new ArrayList<>();   // > 32 h
+        ArrayList<OrderSchema> atDestination = new ArrayList<>(); // REFINAMIENTO: Separar paquetes ya en destino
         
-        for (Map.Entry<Package, ArrayList<Flight>> e : currentSolution.entrySet()) {
-            Package pkg = e.getKey();
-            ArrayList<Flight> route = e.getValue();
+        for (Map.Entry<OrderSchema, ArrayList<FlightSchema>> e : currentSolution.entrySet()) {
+            OrderSchema pkg = e.getKey();
+            ArrayList<FlightSchema> route = e.getValue();
             
             // REFINAMIENTO: Separar paquetes ya en destino (fallback only)
             if (isAlreadyAtDestination(route)) {
@@ -327,7 +327,7 @@ public class ALNSDestruction {
         }
         
         // REFINAMIENTO: Elige grupo prioritariamente, usando atDestination como último recurso
-        ArrayList<Package> selectedGroup;
+        ArrayList<OrderSchema> selectedGroup;
         String groupName;
         
         if (!highSlack.isEmpty()) {
@@ -370,10 +370,10 @@ public class ALNSDestruction {
             Math.min(maxDestroy, selectedGroup.size())
         );
         
-        ArrayList<Map.Entry<Package, ArrayList<Flight>>> destroyed = new ArrayList<>();
+        ArrayList<Map.Entry<OrderSchema, ArrayList<FlightSchema>>> destroyed = new ArrayList<>();
         for (int i = 0; i < numToDestroy; i++) {
-            Package sel = selectedGroup.get(i);
-            ArrayList<Flight> route = currentSolution.get(sel);
+            OrderSchema sel = selectedGroup.get(i);
+            ArrayList<FlightSchema> route = currentSolution.get(sel);
             if (route == null) route = new ArrayList<>(); // Protección contra nulos
             
             destroyed.add(new java.util.AbstractMap.SimpleEntry<>(sel, new ArrayList<>(route)));
@@ -390,12 +390,12 @@ public class ALNSDestruction {
      * vuelo crítico + productos - urgencia
      */
     public DestructionResult congestedRouteDestroy(
-            HashMap<Package, ArrayList<Flight>> currentSolution,
+            HashMap<OrderSchema, ArrayList<FlightSchema>> currentSolution,
             double destructionRate,
             int minDestroy,
             int maxDestroy) {
         
-        HashMap<Package, ArrayList<Flight>> partial = new HashMap<>(currentSolution);
+        HashMap<OrderSchema, ArrayList<FlightSchema>> partial = new HashMap<>(currentSolution);
         if (currentSolution.isEmpty()) {
             return new DestructionResult(partial, new ArrayList<>());
         }
@@ -408,22 +408,22 @@ public class ALNSDestruction {
         
         // CORRECCIÓN: Score por paquete basado en congestión crítica + productos - urgencia
         class Cand { 
-            Package pkg; 
+            OrderSchema pkg;
             double score; 
         }
         
         ArrayList<Cand> cands = new ArrayList<>();
         
-        for (Map.Entry<Package, ArrayList<Flight>> e : currentSolution.entrySet()) {
-            Package p = e.getKey();
-            ArrayList<Flight> r = e.getValue();
+        for (Map.Entry<OrderSchema, ArrayList<FlightSchema>> e : currentSolution.entrySet()) {
+            OrderSchema p = e.getKey();
+            ArrayList<FlightSchema> r = e.getValue();
             if (r == null || r.isEmpty()) continue;
             
             int prods = productsOf(p);
             
             // CORRECCIÓN: Congestión acumulada en vuelos por encima del umbral
             double cong = 0.0;
-            for (Flight f : r) {
+            for (FlightSchema f : r) {
                 double util = (f.getMaxCapacity() > 0) ? 
                     ((double) f.getUsedCapacity() / f.getMaxCapacity()) : 0.0;
                 if (util > UTIL_THRESHOLD) {
@@ -456,11 +456,11 @@ public class ALNSDestruction {
             Math.min(maxDestroy, cands.size())
         );
         
-        ArrayList<Map.Entry<Package, ArrayList<Flight>>> destroyed = new ArrayList<>();
+        ArrayList<Map.Entry<OrderSchema, ArrayList<FlightSchema>>> destroyed = new ArrayList<>();
         for (int i = 0; i < numToDestroy; i++) {
-            Package sel = cands.get(i).pkg;
+            OrderSchema sel = cands.get(i).pkg;
             // REFINAMIENTO: Consistencia - usar currentSolution como fuente
-            ArrayList<Flight> route = currentSolution.get(sel);
+            ArrayList<FlightSchema> route = currentSolution.get(sel);
             if (route == null) route = new ArrayList<>(); // Protección contra nulos
             
             destroyed.add(new java.util.AbstractMap.SimpleEntry<>(sel, new ArrayList<>(route)));
@@ -476,21 +476,21 @@ public class ALNSDestruction {
      * Clase para encapsular el resultado de una operación de destrucción
      */
     public static class DestructionResult {
-        private HashMap<Package, ArrayList<Flight>> partialSolution;
-        private ArrayList<Map.Entry<Package, ArrayList<Flight>>> destroyedPackages;
+        private HashMap<OrderSchema, ArrayList<FlightSchema>> partialSolution;
+        private ArrayList<Map.Entry<OrderSchema, ArrayList<FlightSchema>>> destroyedPackages;
         
         public DestructionResult(
-                HashMap<Package, ArrayList<Flight>> partialSolution,
-                ArrayList<Map.Entry<Package, ArrayList<Flight>>> destroyedPackages) {
+                HashMap<OrderSchema, ArrayList<FlightSchema>> partialSolution,
+                ArrayList<Map.Entry<OrderSchema, ArrayList<FlightSchema>>> destroyedPackages) {
             this.partialSolution = partialSolution;
             this.destroyedPackages = destroyedPackages;
         }
         
-        public HashMap<Package, ArrayList<Flight>> getPartialSolution() {
+        public HashMap<OrderSchema, ArrayList<FlightSchema>> getPartialSolution() {
             return partialSolution;
         }
         
-        public ArrayList<Map.Entry<Package, ArrayList<Flight>>> getDestroyedPackages() {
+        public ArrayList<Map.Entry<OrderSchema, ArrayList<FlightSchema>>> getDestroyedPackages() {
             return destroyedPackages;
         }
         

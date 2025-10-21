@@ -17,7 +17,7 @@ public class FlightSegmentService {
 
   public FlightSegment getFlightSegment(Integer id) {
     return flightSegmentRepository.findById(id)
-        .orElseThrow(() -> new EntityNotFoundException("Flight segment not found with id: " + id));
+        .orElseThrow(() -> new EntityNotFoundException("FlightSchema segment not found with id: " + id));
   }
 
   public List<FlightSegment> fetchFlightSegments(List<Integer> ids) {
@@ -62,7 +62,7 @@ public class FlightSegmentService {
 
   public void deleteFlightSegment(Integer id) {
     if (!flightSegmentRepository.existsById(id)) {
-      throw new EntityNotFoundException("Flight segment not found with id: " + id);
+      throw new EntityNotFoundException("FlightSchema segment not found with id: " + id);
     }
     flightSegmentRepository.deleteById(id);
   }

@@ -18,7 +18,7 @@ public class FlightService {
 
   public Flight get(Integer id) {
     return repository.findById(id)
-        .orElseThrow(() -> new EntityNotFoundException("Flight not found with id: " + id));
+        .orElseThrow(() -> new EntityNotFoundException("FlightSchema not found with id: " + id));
   }
 
   public List<Flight> fetch(List<Integer> ids) {
@@ -30,7 +30,7 @@ public class FlightService {
     if (f.getCreatedAt() == null) f.setCreatedAt(LocalDateTime.now());
     validate(f);
     if (repository.existsByCode(f.getCode()))
-      throw new IllegalArgumentException("Flight code already exists: " + f.getCode());
+      throw new IllegalArgumentException("FlightSchema code already exists: " + f.getCode());
     return repository.save(f);
   }
 
@@ -58,14 +58,14 @@ public class FlightService {
 
     repository.findByCode(f.getCode())
         .filter(existing -> !existing.getId().equals(f.getId()))
-        .ifPresent(existing -> { throw new IllegalArgumentException("Flight code already exists: " + f.getCode()); });
+        .ifPresent(existing -> { throw new IllegalArgumentException("FlightSchema code already exists: " + f.getCode()); });
 
     return repository.save(f);
   }
 
   public void delete(Integer id) {
     if (!repository.existsById(id))
-      throw new EntityNotFoundException("Flight not found with id: " + id);
+      throw new EntityNotFoundException("FlightSchema not found with id: " + id);
     repository.deleteById(id);
   }
 

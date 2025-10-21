@@ -20,7 +20,7 @@ public class RouteService {
 
   public Route getRoute(Integer id) {
     return routeRepository.findById(id)
-        .orElseThrow(() -> new EntityNotFoundException("Route not found with id: " + id));
+        .orElseThrow(() -> new EntityNotFoundException("RouteSchema not found with id: " + id));
   }
 
   public List<Route> fetchRoutes(List<Integer> ids) {
@@ -37,7 +37,7 @@ public class RouteService {
 
     if (solId != null && originId != null && destId != null &&
         routeRepository.existsByOriginCity_IdAndDestinationCity_IdAndSolution_Id(originId, destId, solId)) {
-      throw new IllegalArgumentException("Route already exists for origin-destination-solution");
+      throw new IllegalArgumentException("RouteSchema already exists for origin-destination-solution");
     }
     return routeRepository.save(route);
   }
@@ -77,7 +77,7 @@ public class RouteService {
 
   public void deleteRoute(Integer id) {
     if (!routeRepository.existsById(id)) {
-      throw new EntityNotFoundException("Route not found with id: " + id);
+      throw new EntityNotFoundException("RouteSchema not found with id: " + id);
     }
     routeRepository.deleteById(id);
   }

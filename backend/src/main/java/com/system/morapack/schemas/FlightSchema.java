@@ -9,11 +9,11 @@ import lombok.Setter;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class Flight {
+public class FlightSchema {
     private int id;
     private double frequencyPerDay;
-    private Airport originAirport;
-    private Airport destinationAirport;
+    private AirportSchema originAirportSchema;
+    private AirportSchema destinationAirportSchema;
     private int maxCapacity;
     private int usedCapacity;
     private double transportTime;

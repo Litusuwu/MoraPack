@@ -20,7 +20,7 @@ public class AirportService {
 
   public Airport getAirport(Integer id) {
     return airportRepository.findById(id)
-        .orElseThrow(() -> new EntityNotFoundException("Airport not found with id: " + id));
+        .orElseThrow(() -> new EntityNotFoundException("AirportSchema not found with id: " + id));
   }
 
   public List<Airport> fetchAirports(List<Integer> ids) {
@@ -32,7 +32,7 @@ public class AirportService {
     normalize(a);
     validate(a);
     if (airportRepository.existsByCodeIATA(a.getCodeIATA()))
-      throw new IllegalArgumentException("Airport code already exists: " + a.getCodeIATA());
+      throw new IllegalArgumentException("AirportSchema code already exists: " + a.getCodeIATA());
     ensureWarehouseFree(a.getWarehouse());
     return airportRepository.save(a);
   }
@@ -43,7 +43,7 @@ public class AirportService {
     // Chequeos simples
     for (Airport a : list) {
       if (airportRepository.existsByCodeIATA(a.getCodeIATA()))
-        throw new IllegalArgumentException("Airport code already exists: " + a.getCodeIATA());
+        throw new IllegalArgumentException("AirportSchema code already exists: " + a.getCodeIATA());
       ensureWarehouseFree(a.getWarehouse());
     }
     return airportRepository.saveAll(list);
@@ -75,14 +75,14 @@ public class AirportService {
     // Unicidad codeIATA
     airportRepository.findByCodeIATA(a.getCodeIATA())
         .filter(found -> !found.getId().equals(a.getId()))
-        .ifPresent(found -> { throw new IllegalArgumentException("Airport code already exists: " + a.getCodeIATA()); });
+        .ifPresent(found -> { throw new IllegalArgumentException("AirportSchema code already exists: " + a.getCodeIATA()); });
 
     return airportRepository.save(a);
   }
 
   public void deleteAirport(Integer id) {
     if (!airportRepository.existsById(id)) {
-      throw new EntityNotFoundException("Airport not found with id: " + id);
+      throw new EntityNotFoundException("AirportSchema not found with id: " + id);
     }
     airportRepository.deleteById(id);
   }
@@ -94,7 +94,7 @@ public class AirportService {
 
   public Airport getByCode(String codeIATA) {
     return airportRepository.findByCodeIATA(codeIATA)
-        .orElseThrow(() -> new EntityNotFoundException("Airport not found with code: " + codeIATA));
+        .orElseThrow(() -> new EntityNotFoundException("AirportSchema not found with code: " + codeIATA));
   }
 
   public List<Airport> getByCity(Integer cityId) {

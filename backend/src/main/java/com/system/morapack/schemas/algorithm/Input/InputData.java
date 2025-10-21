@@ -1,7 +1,7 @@
 package com.system.morapack.schemas.algorithm.Input;
 
-import com.system.morapack.schemas.Airport;
-import com.system.morapack.schemas.Flight;
+import com.system.morapack.schemas.AirportSchema;
+import com.system.morapack.schemas.FlightSchema;
 import com.system.morapack.config.Constants;
 
 import java.io.BufferedReader;
@@ -14,21 +14,21 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class InputData {
-    private ArrayList<Flight> flights;
+    private ArrayList<FlightSchema> flightSchemas;
     private final String filePath;
-    private ArrayList<Airport> airports;
+    private ArrayList<AirportSchema> airportSchemas;
 
-    public InputData(String filePath, ArrayList<Airport> airports) {
+    public InputData(String filePath, ArrayList<AirportSchema> airportSchemas) {
         this.filePath = filePath;
-        this.flights = new ArrayList<>();
-        this.airports = airports;
+        this.flightSchemas = new ArrayList<>();
+        this.airportSchemas = airportSchemas;
     }
 
-    public ArrayList<Flight> readFlights() {
+    public ArrayList<FlightSchema> readFlights() {
         try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
             String line;
             int flightId = 1;
-            Map<String, Airport> airportMap = createAirportMap();
+            Map<String, AirportSchema> airportMap = createAirportMap();
             
             while ((line = reader.readLine()) != null) {
                 // Skip empty lines
@@ -46,29 +46,29 @@ public class InputData {
                     String arrivalTime = parts[3];
                     int maxCapacity = Integer.parseInt(parts[4]);
                     
-                    // Find airports by IATA code
-                    Airport originAirport = airportMap.get(originCode);
-                    Airport destinationAirport = airportMap.get(destinationCode);
+                    // Find airportSchemas by IATA code
+                    AirportSchema originAirportSchema = airportMap.get(originCode);
+                    AirportSchema destinationAirportSchema = airportMap.get(destinationCode);
                     
-                    if (originAirport != null && destinationAirport != null) {
+                    if (originAirportSchema != null && destinationAirportSchema != null) {
                         // Calculate transport time in hours
                         double transportTime = calculateTransportTime(departureTime, arrivalTime);
                         
                         // Calculate cost (this is a placeholder - you might want to implement a more sophisticated cost model)
-                        double cost = calculateFlightCost(originAirport, destinationAirport, maxCapacity);
+                        double cost = calculateFlightCost(originAirportSchema, destinationAirportSchema, maxCapacity);
                         
-                        // Create Flight object
-                        Flight flight = new Flight();
-                        flight.setId(flightId++);
-                        flight.setFrequencyPerDay(1.0); // Default frequency
-                        flight.setOriginAirport(originAirport);
-                        flight.setDestinationAirport(destinationAirport);
-                        flight.setMaxCapacity(maxCapacity);
-                        flight.setUsedCapacity(0);
-                        flight.setTransportTime(transportTime);
-                        flight.setCost(cost);
+                        // Create FlightSchema object
+                        FlightSchema flightSchema = new FlightSchema();
+                        flightSchema.setId(flightId++);
+                        flightSchema.setFrequencyPerDay(1.0); // Default frequency
+                        flightSchema.setOriginAirportSchema(originAirportSchema);
+                        flightSchema.setDestinationAirportSchema(destinationAirportSchema);
+                        flightSchema.setMaxCapacity(maxCapacity);
+                        flightSchema.setUsedCapacity(0);
+                        flightSchema.setTransportTime(transportTime);
+                        flightSchema.setCost(cost);
                         
-                        flights.add(flight);
+                        flightSchemas.add(flightSchema);
                     }
                 }
             }
@@ -78,13 +78,13 @@ public class InputData {
             e.printStackTrace();
         }
         
-        return flights;
+        return flightSchemas;
     }
     
-    private Map<String, Airport> createAirportMap() {
-        Map<String, Airport> map = new HashMap<>();
-        for (Airport airport : airports) {
-            map.put(airport.getCodeIATA(), airport);
+    private Map<String, AirportSchema> createAirportMap() {
+        Map<String, AirportSchema> map = new HashMap<>();
+        for (AirportSchema airportSchema : airportSchemas) {
+            map.put(airportSchema.getCodeIATA(), airportSchema);
         }
         return map;
     }
@@ -96,7 +96,7 @@ public class InputData {
         // Calculate duration between departure and arrival
         long minutes;
         if (arrival.isBefore(departure)) {
-            // Flight crosses midnight
+            // FlightSchema crosses midnight
             minutes = Duration.between(departure, LocalTime.of(23, 59, 59)).toMinutes() + 
                      Duration.between(LocalTime.of(0, 0), arrival).toMinutes() + 1;
         } else {
@@ -113,9 +113,9 @@ public class InputData {
         return LocalTime.of(hours, minutes);
     }
     
-    private double calculateFlightCost(Airport origin, Airport destination, int capacity) {
-        // Simple cost model based on whether airports are in the same continent and capacity
-        boolean sameContinentFlight = origin.getCity().getContinent() == destination.getCity().getContinent();
+    private double calculateFlightCost(AirportSchema origin, AirportSchema destination, int capacity) {
+        // Simple cost model based on whether airportSchemas are in the same continent and capacity
+        boolean sameContinentFlight = origin.getCitySchema().getContinent() == destination.getCitySchema().getContinent();
         
         double baseCost;
         if (sameContinentFlight) {

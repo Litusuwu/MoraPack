@@ -9,7 +9,7 @@ import lombok.Setter;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class City {
+public class CitySchema {
     private int id;
     private String name;
     private Continent continent;

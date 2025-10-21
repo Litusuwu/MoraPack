@@ -11,15 +11,15 @@ import java.util.ArrayList;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class Package {
+public class OrderSchema {
     private int id;
-    private Customer customer;
-    private City destinationCity;
+    private CustomerSchema customerSchema;
+    private CitySchema destinationCitySchema;
     private LocalDateTime orderDate;
     private LocalDateTime deliveryDeadline;
     private PackageStatus status;
-    private City currentLocation;
-    private Route assignedRoute;
+    private CitySchema currentLocation;
+    private RouteSchema assignedRouteSchema;
     private double priority;
-    private ArrayList<Product> products;
+    private ArrayList<ProductSchema> productSchemas;
 }

@@ -7,9 +7,9 @@ import java.util.Map;
 
 @Getter
 @Setter
-public class Solution {
-    private List<Route> routes;
-    private Map<OrderSchema, Route> packageRouteMap;
+public class SolutionSchema {
+    private List<RouteSchema> routeSchemas;
+    private Map<OrderSchema, RouteSchema> packageRouteMap;
     private double totalCost;
     private double totalTime;
     private int undeliveredPackages;

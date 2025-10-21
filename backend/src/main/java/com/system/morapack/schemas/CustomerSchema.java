@@ -7,9 +7,9 @@ import lombok.Setter;
 @Getter
 @Setter
 @NoArgsConstructor
-public class Customer {
+public class CustomerSchema {
     private int id;
     private String name;
     private String email;
-    private City deliveryCity;
+    private CitySchema deliveryCitySchema;
 }

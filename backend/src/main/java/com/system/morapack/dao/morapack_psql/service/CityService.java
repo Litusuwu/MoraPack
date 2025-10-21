@@ -18,7 +18,7 @@ public class CityService {
 
   public City getCity(Integer id) {
     return cityRepository.findById(id)
-        .orElseThrow(() -> new EntityNotFoundException("City not found with id: " + id));
+        .orElseThrow(() -> new EntityNotFoundException("CitySchema not found with id: " + id));
   }
 
   public List<City> fetchCities(List<Integer> ids) {
@@ -29,7 +29,7 @@ public class CityService {
   public City createCity(City city) {
     // Usa nombre+continente para evitar duplicados razonables.
     if (cityRepository.existsByNameAndContinent(city.getName(), city.getContinent())) {
-      throw new IllegalArgumentException("City already exists: " + city.getName() + " in " + city.getContinent());
+      throw new IllegalArgumentException("CitySchema already exists: " + city.getName() + " in " + city.getContinent());
     }
     return cityRepository.save(city);
   }
@@ -49,7 +49,7 @@ public class CityService {
 
   public void deleteCity(Integer id) {
     if (!cityRepository.existsById(id)) {
-      throw new EntityNotFoundException("City not found with id: " + id);
+      throw new EntityNotFoundException("CitySchema not found with id: " + id);
     }
     cityRepository.deleteById(id);
   }

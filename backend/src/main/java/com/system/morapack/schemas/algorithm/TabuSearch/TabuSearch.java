@@ -1,8 +1,8 @@
 package com.system.morapack.schemas.algorithm.TabuSearch;
 
-import com.system.morapack.schemas.Airport;
-import com.system.morapack.schemas.Flight;
-import com.system.morapack.schemas.Package;
+import com.system.morapack.schemas.AirportSchema;
+import com.system.morapack.schemas.FlightSchema;
+import com.system.morapack.schemas.OrderSchema;
 import com.system.morapack.schemas.algorithm.Input.InputAirports;
 import com.system.morapack.schemas.algorithm.Input.InputData;
 import com.system.morapack.schemas.algorithm.Input.InputProducts;
@@ -20,10 +20,10 @@ import java.util.Random;
  */
 public class TabuSearch {
     // Datos de entrada
-    private ArrayList<Airport> airports;
-    private ArrayList<Flight> flights;
-    private ArrayList<Package> packages;
-    private Map<String, Airport> cityToAirportMap;
+    private ArrayList<AirportSchema> airportSchemas;
+    private ArrayList<FlightSchema> flightSchemas;
+    private ArrayList<OrderSchema> orderSchemas;
+    private Map<String, AirportSchema> cityToAirportMap;
     
     // Parámetros del algoritmo
     private int maxIterations;
@@ -70,7 +70,7 @@ public class TabuSearch {
         
         // Inicializar componentes
         this.tabuList = new TabuList(tabuListSize, tabuTenure);
-        this.neighborhoodGenerator = new NeighborhoodGenerator(flights, airports, cityToAirportMap, neighborhoodSize);
+        this.neighborhoodGenerator = new NeighborhoodGenerator(flightSchemas, airportSchemas, cityToAirportMap, neighborhoodSize);
         
         // Inicializar variables de control
         this.iterationsSinceImprovement = 0;
@@ -94,7 +94,7 @@ public class TabuSearch {
         
         // Reinicializar componentes con los nuevos parámetros
         this.tabuList = new TabuList(tabuListSize, tabuTenure);
-        this.neighborhoodGenerator = new NeighborhoodGenerator(flights, airports, cityToAirportMap, neighborhoodSize);
+        this.neighborhoodGenerator = new NeighborhoodGenerator(flightSchemas, airportSchemas, cityToAirportMap, neighborhoodSize);
     }
     
     /**
@@ -105,31 +105,31 @@ public class TabuSearch {
         
         // Cargar aeropuertos
         InputAirports inputAirports = new InputAirports(airportsFilePath);
-        this.airports = inputAirports.readAirports();
-        System.out.println("Aeropuertos cargados: " + airports.size());
+        this.airportSchemas = inputAirports.readAirports();
+        System.out.println("Aeropuertos cargados: " + airportSchemas.size());
         
         // Cargar vuelos
-        InputData inputData = new InputData(flightsFilePath, airports);
-        this.flights = inputData.readFlights();
-        System.out.println("Vuelos cargados: " + flights.size());
+        InputData inputData = new InputData(flightsFilePath, airportSchemas);
+        this.flightSchemas = inputData.readFlights();
+        System.out.println("Vuelos cargados: " + flightSchemas.size());
         
         // Cargar productos/paquetes
-        InputProducts inputProducts = new InputProducts(productsFilePath, airports);
-        this.packages = inputProducts.readProducts();
-        System.out.println("Paquetes cargados: " + packages.size());
+        InputProducts inputProducts = new InputProducts(productsFilePath, airportSchemas);
+        this.orderSchemas = inputProducts.readProducts();
+        System.out.println("Paquetes cargados: " + orderSchemas.size());
         
         // Construir mapa de ciudades a aeropuertos
         buildCityToAirportMap();
     }
     
     /**
-     * Construye un mapa de nombres de ciudad a objetos Airport
+     * Construye un mapa de nombres de ciudad a objetos AirportSchema
      */
     private void buildCityToAirportMap() {
         this.cityToAirportMap = new HashMap<>();
-        for (Airport airport : airports) {
-            if (airport.getCity() != null && airport.getCity().getName() != null) {
-                cityToAirportMap.put(airport.getCity().getName().toLowerCase().trim(), airport);
+        for (AirportSchema airportSchema : airportSchemas) {
+            if (airportSchema.getCitySchema() != null && airportSchema.getCitySchema().getName() != null) {
+                cityToAirportMap.put(airportSchema.getCitySchema().getName().toLowerCase().trim(), airportSchema);
             }
         }
     }
@@ -250,7 +250,7 @@ public class TabuSearch {
         System.out.println("  Tiempo total: " + totalTime + " segundos");
         System.out.println("  Iteraciones: " + currentIteration);
         System.out.println("  Peso final: " + bestScore);
-        System.out.println("  Paquetes asignados: " + bestSolution.getAssignedPackagesCount() + "/" + packages.size());
+        System.out.println("  Paquetes asignados: " + bestSolution.getAssignedPackagesCount() + "/" + orderSchemas.size());
         System.out.println("  Diversificaciones: " + diversificationCount);
         System.out.println("  Intensificaciones: " + intensificationCount);
         
@@ -264,7 +264,7 @@ public class TabuSearch {
         System.out.println("=== GENERANDO SOLUCIÓN INICIAL PARA TABU SEARCH ===");
         
         // Crear una solución vacía - la unitización se aplica internamente en TabuSolution
-        TabuSolution solution = new TabuSolution(packages, airports, flights);
+        TabuSolution solution = new TabuSolution(orderSchemas, airportSchemas, flightSchemas);
         
         // Decidir entre greedy o aleatoria basado en el parámetro
         if (Constants.USE_GREEDY_INITIAL_SOLUTION) {
@@ -283,8 +283,8 @@ public class TabuSearch {
         System.out.println("Generando solución inicial greedy...");
         
         // Obtener paquetes y ordenar por deadline
-        ArrayList<Package> sortedPackages = new ArrayList<>(packages);
-        Collections.sort(sortedPackages, (p1, p2) -> {
+        ArrayList<OrderSchema> sortedOrderSchemas = new ArrayList<>(orderSchemas);
+        Collections.sort(sortedOrderSchemas, (p1, p2) -> {
             if (p1.getDeliveryDeadline() == null) return 1;
             if (p2.getDeliveryDeadline() == null) return -1;
             return p1.getDeliveryDeadline().compareTo(p2.getDeliveryDeadline());
@@ -293,7 +293,7 @@ public class TabuSearch {
         int assignedCount = 0;
         
         // Intentar asignar cada paquete
-        for (Package pkg : sortedPackages) {
+        for (OrderSchema pkg : sortedOrderSchemas) {
             // Generar posibles rutas para este paquete
             List<TabuMove> insertMoves = neighborhoodGenerator.generateInsertMoves(
                 solution.getSolution(), Collections.singletonList(pkg), 5);
@@ -322,7 +322,7 @@ public class TabuSearch {
             }
         }
         
-        System.out.println("Solución greedy generada: " + assignedCount + "/" + packages.size() + " paquetes asignados");
+        System.out.println("Solución greedy generada: " + assignedCount + "/" + orderSchemas.size() + " paquetes asignados");
     }
     
     /**
@@ -333,12 +333,12 @@ public class TabuSearch {
         System.out.println("Probabilidad de asignación: " + (Constants.RANDOM_ASSIGNMENT_PROBABILITY * 100) + "%");
         
         // Barajar paquetes para orden aleatorio
-        ArrayList<Package> shuffledPackages = new ArrayList<>(packages);
-        Collections.shuffle(shuffledPackages, random);
+        ArrayList<OrderSchema> shuffledOrderSchemas = new ArrayList<>(orderSchemas);
+        Collections.shuffle(shuffledOrderSchemas, random);
         
         int assignedCount = 0;
         
-        for (Package pkg : shuffledPackages) {
+        for (OrderSchema pkg : shuffledOrderSchemas) {
             // Asignación aleatoria basada en probabilidad
             if (random.nextDouble() < Constants.RANDOM_ASSIGNMENT_PROBABILITY) {
                 // Generar posibles rutas para este paquete
@@ -355,7 +355,7 @@ public class TabuSearch {
             }
         }
         
-        System.out.println("Solución aleatoria generada: " + assignedCount + "/" + packages.size() + " paquetes asignados");
+        System.out.println("Solución aleatoria generada: " + assignedCount + "/" + orderSchemas.size() + " paquetes asignados");
     }
     
     /**
@@ -368,15 +368,15 @@ public class TabuSearch {
         }
         
         // Enfocar en mejorar los paquetes ya asignados
-        HashMap<Package, ArrayList<Flight>> currentSolutionMap = currentSolution.getSolution();
-        ArrayList<Package> assignedPackages = new ArrayList<>(currentSolutionMap.keySet());
+        HashMap<OrderSchema, ArrayList<FlightSchema>> currentSolutionMap = currentSolution.getSolution();
+        ArrayList<OrderSchema> assignedOrderSchemas = new ArrayList<>(currentSolutionMap.keySet());
         
         // Ordenar paquetes por prioridad o algún otro criterio relevante
-        Collections.sort(assignedPackages, (p1, p2) -> 
+        Collections.sort(assignedOrderSchemas, (p1, p2) ->
             Double.compare(p2.getPriority(), p1.getPriority()));
         
         // Intentar reasignar paquetes de alta prioridad a mejores rutas
-        int maxPackagesToIntensify = Math.min(50, assignedPackages.size());
+        int maxPackagesToIntensify = Math.min(50, assignedOrderSchemas.size());
         
         for (int i = 0; i < maxPackagesToIntensify; i++) {
             // Procesar paquetes de alta prioridad
@@ -461,21 +461,21 @@ public class TabuSearch {
     private void diversifyByRemoving() {
         System.out.println("Estrategia: ELIMINACIÓN DE PAQUETES");
         
-        HashMap<Package, ArrayList<Flight>> currentSolutionMap = currentSolution.getSolution();
-        ArrayList<Package> assignedPackages = new ArrayList<>(currentSolutionMap.keySet());
+        HashMap<OrderSchema, ArrayList<FlightSchema>> currentSolutionMap = currentSolution.getSolution();
+        ArrayList<OrderSchema> assignedOrderSchemas = new ArrayList<>(currentSolutionMap.keySet());
         
         // Determinar cuántos paquetes liberar
-        int packagesToRemove = (int)(assignedPackages.size() * 0.3); // 30% de los paquetes
+        int packagesToRemove = (int)(assignedOrderSchemas.size() * 0.3); // 30% de los paquetes
         packagesToRemove = Math.min(packagesToRemove, 500); // Máximo 500 paquetes
         packagesToRemove = Math.max(packagesToRemove, 50);  // Mínimo 50 paquetes
         
         // Barajar la lista para aleatorización
-        Collections.shuffle(assignedPackages, random);
+        Collections.shuffle(assignedOrderSchemas, random);
         
         // Eliminar paquetes
         int removedCount = 0;
-        for (int i = 0; i < Math.min(packagesToRemove, assignedPackages.size()); i++) {
-            Package pkg = assignedPackages.get(i);
+        for (int i = 0; i < Math.min(packagesToRemove, assignedOrderSchemas.size()); i++) {
+            OrderSchema pkg = assignedOrderSchemas.get(i);
             TabuMove removeMove = new TabuMove(TabuMove.MoveType.REMOVE, pkg, currentSolutionMap.get(pkg));
             
             if (currentSolution.applyMove(removeMove)) {
@@ -483,7 +483,7 @@ public class TabuSearch {
             }
         }
         
-        System.out.println("Eliminados " + removedCount + "/" + assignedPackages.size() + " paquetes");
+        System.out.println("Eliminados " + removedCount + "/" + assignedOrderSchemas.size() + " paquetes");
     }
     
     /**
@@ -492,20 +492,20 @@ public class TabuSearch {
     private void diversifyByReassigning() {
         System.out.println("Estrategia: REASIGNACIÓN DE RUTAS");
         
-        HashMap<Package, ArrayList<Flight>> currentSolutionMap = currentSolution.getSolution();
-        ArrayList<Package> assignedPackages = new ArrayList<>(currentSolutionMap.keySet());
+        HashMap<OrderSchema, ArrayList<FlightSchema>> currentSolutionMap = currentSolution.getSolution();
+        ArrayList<OrderSchema> assignedOrderSchemas = new ArrayList<>(currentSolutionMap.keySet());
         
         // Determinar cuántos paquetes reasignar
-        int packagesToReassign = (int)(assignedPackages.size() * 0.4); // 40% de los paquetes
+        int packagesToReassign = (int)(assignedOrderSchemas.size() * 0.4); // 40% de los paquetes
         packagesToReassign = Math.min(packagesToReassign, 400); // Máximo 400 paquetes
         packagesToReassign = Math.max(packagesToReassign, 50);  // Mínimo 50 paquetes
         
         // Barajar la lista para aleatorización
-        Collections.shuffle(assignedPackages, random);
+        Collections.shuffle(assignedOrderSchemas, random);
         
         // Reasignar paquetes
         int reassignedCount = 0;
-        for (int i = 0; i < Math.min(packagesToReassign, assignedPackages.size()); i++) {
+        for (int i = 0; i < Math.min(packagesToReassign, assignedOrderSchemas.size()); i++) {
             // Generar rutas alternativas para paquetes seleccionados
             List<TabuMove> reassignMoves = neighborhoodGenerator.generateReassignMoves(
                 currentSolution.getSolution(), 1);
@@ -520,7 +520,7 @@ public class TabuSearch {
             }
         }
         
-        System.out.println("Reasignados " + reassignedCount + "/" + assignedPackages.size() + " paquetes");
+        System.out.println("Reasignados " + reassignedCount + "/" + assignedOrderSchemas.size() + " paquetes");
     }
     
     /**
@@ -529,17 +529,17 @@ public class TabuSearch {
     private void diversifyBySwapping() {
         System.out.println("Estrategia: INTERCAMBIO DE RUTAS");
         
-        HashMap<Package, ArrayList<Flight>> currentSolutionMap = currentSolution.getSolution();
-        ArrayList<Package> assignedPackages = new ArrayList<>(currentSolutionMap.keySet());
+        HashMap<OrderSchema, ArrayList<FlightSchema>> currentSolutionMap = currentSolution.getSolution();
+        ArrayList<OrderSchema> assignedOrderSchemas = new ArrayList<>(currentSolutionMap.keySet());
         
-        if (assignedPackages.size() < 2) {
+        if (assignedOrderSchemas.size() < 2) {
             System.out.println("No hay suficientes paquetes para intercambiar, cambiando a estrategia de eliminación.");
             diversifyByRemoving();
             return;
         }
         
         // Determinar cuántos intercambios realizar
-        int swapsToPerform = (int)(assignedPackages.size() * 0.25); // 25% de los paquetes
+        int swapsToPerform = (int)(assignedOrderSchemas.size() * 0.25); // 25% de los paquetes
         swapsToPerform = Math.min(swapsToPerform, 300); // Máximo 300 intercambios
         swapsToPerform = Math.max(swapsToPerform, 40);  // Mínimo 40 intercambios
         
@@ -547,17 +547,17 @@ public class TabuSearch {
         int swapsPerformed = 0;
         for (int i = 0; i < swapsToPerform; i++) {
             // Seleccionar dos paquetes aleatorios diferentes
-            int idx1 = random.nextInt(assignedPackages.size());
+            int idx1 = random.nextInt(assignedOrderSchemas.size());
             int idx2;
             do {
-                idx2 = random.nextInt(assignedPackages.size());
+                idx2 = random.nextInt(assignedOrderSchemas.size());
             } while (idx1 == idx2);
             
-            Package pkg1 = assignedPackages.get(idx1);
-            Package pkg2 = assignedPackages.get(idx2);
+            OrderSchema pkg1 = assignedOrderSchemas.get(idx1);
+            OrderSchema pkg2 = assignedOrderSchemas.get(idx2);
             
-            ArrayList<Flight> route1 = currentSolutionMap.get(pkg1);
-            ArrayList<Flight> route2 = currentSolutionMap.get(pkg2);
+            ArrayList<FlightSchema> route1 = currentSolutionMap.get(pkg1);
+            ArrayList<FlightSchema> route2 = currentSolutionMap.get(pkg2);
             
             // Crear movimiento de intercambio
             TabuMove swapMove = new TabuMove(TabuMove.MoveType.SWAP, pkg1, route1, pkg2, route2);
@@ -580,16 +580,16 @@ public class TabuSearch {
         // Aquí podrías reutilizar el código de descripción de solución de ALNS
         // o implementar tu propia versión para Tabu Search
         
-        HashMap<Package, ArrayList<Flight>> solutionMap = solution.getSolution();
+        HashMap<OrderSchema, ArrayList<FlightSchema>> solutionMap = solution.getSolution();
         int assignedPackages = solutionMap.size();
         int unassignedPackages = solution.getUnassignedPackagesCount();
         int score = solution.getScore();
         
         System.out.println("\n========== DESCRIPCIÓN DE LA SOLUCIÓN TABU SEARCH ==========");
         System.out.println("Peso de la solución: " + score);
-        System.out.println("Paquetes asignados: " + assignedPackages + "/" + packages.size());
-        System.out.println("Paquetes no asignados: " + unassignedPackages + "/" + packages.size() + 
-                         " (" + String.format("%.1f", (unassignedPackages * 100.0 / packages.size())) + "%)");
+        System.out.println("Paquetes asignados: " + assignedPackages + "/" + orderSchemas.size());
+        System.out.println("Paquetes no asignados: " + unassignedPackages + "/" + orderSchemas.size() +
+                         " (" + String.format("%.1f", (unassignedPackages * 100.0 / orderSchemas.size())) + "%)");
         
         // Más estadísticas detalladas según el nivel de detalle...
         // (podrías expandir esto según sea necesario)

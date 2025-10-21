@@ -10,7 +10,7 @@ import java.util.List;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class Route {
+public class RouteSchema {
     private int id;
     private List<FlightSchema> flightSchemas;
     private CitySchema originCitySchema;

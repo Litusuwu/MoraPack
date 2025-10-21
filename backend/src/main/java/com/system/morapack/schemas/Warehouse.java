@@ -11,7 +11,7 @@ import lombok.Setter;
 @NoArgsConstructor
 public class Warehouse {
     private int id;
-    private Airport airport;
+    private AirportSchema airportSchema;
     private int maxCapacity;
     private int usedCapacity;
     private String name;

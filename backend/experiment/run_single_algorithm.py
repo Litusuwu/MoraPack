@@ -27,7 +27,7 @@ def setup_jvm():
 
 def run_alns():
     try:
-        ALNSSolution = JClass("com.system.morapack.schemas.algorithm.ALNS.Solution")
+        ALNSSolution = JClass("com.system.morapack.schemas.algorithm.ALNS.SolutionSchema")
         
         print("Running ALNS simulation...")
         start_time = time.time()

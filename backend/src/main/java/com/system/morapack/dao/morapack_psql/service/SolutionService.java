@@ -20,7 +20,7 @@ public class SolutionService {
 
   public Solution getSolution(Integer id) {
     return solutionRepository.findById(id)
-        .orElseThrow(() -> new EntityNotFoundException("Solution not found with id: " + id));
+        .orElseThrow(() -> new EntityNotFoundException("SolutionSchema not found with id: " + id));
   }
 
   public List<Solution> fetchSolutions(List<Integer> ids) {
@@ -66,7 +66,7 @@ public class SolutionService {
 
   public void deleteSolution(Integer id) {
     if (!solutionRepository.existsById(id)) {
-      throw new EntityNotFoundException("Solution not found with id: " + id);
+      throw new EntityNotFoundException("SolutionSchema not found with id: " + id);
     }
     solutionRepository.deleteById(id);
   }

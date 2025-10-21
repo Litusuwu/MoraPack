@@ -9,14 +9,14 @@ import lombok.Setter;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class Airport {
+public class AirportSchema {
   private int id;
   private String codeIATA;
   private String alias;
   private int timezoneUTC;
   private String latitude;
   private String longitude;
-  private City city;
+  private CitySchema citySchema;
   private AirportState state;
   private Warehouse warehouse;
 }

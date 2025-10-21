@@ -16,7 +16,7 @@ public class ProductService {
 
   public Product getProduct(Integer id) {
     return productRepository.findById(id)
-        .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
+        .orElseThrow(() -> new EntityNotFoundException("ProductSchema not found with id: " + id));
   }
 
   public List<Product> fetchProducts(List<Integer> ids) {
@@ -36,7 +36,7 @@ public class ProductService {
 
   public Product createProduct(Product product) {
     if (productRepository.existsByName(product.getName())) {
-      throw new IllegalArgumentException("Product already exists: " + product.getName());
+      throw new IllegalArgumentException("ProductSchema already exists: " + product.getName());
     }
     return productRepository.save(product);
   }
@@ -60,7 +60,7 @@ public class ProductService {
 
   public void deleteProduct(Integer id) {
     if (!productRepository.existsById(id)) {
-      throw new EntityNotFoundException("Product not found with id: " + id);
+      throw new EntityNotFoundException("ProductSchema not found with id: " + id);
     }
     productRepository.deleteById(id);
   }

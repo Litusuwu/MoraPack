@@ -65,7 +65,7 @@ public class Constants {
     public static final double NEIGHBORHOOD_SIZE_FACTOR = 0.1;
     public static final double ASPIRATION_THRESHOLD_PERCENTAGE = 0.05;
     
-    // Product unitization - Feature toggle
+    // ProductSchema unitization - Feature toggle
     public static final boolean ENABLE_PRODUCT_UNITIZATION = true;
     
     // Temporal validation constants
