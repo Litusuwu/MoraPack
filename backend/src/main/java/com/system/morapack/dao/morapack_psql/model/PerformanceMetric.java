@@ -29,15 +29,15 @@ public class PerformanceMetric {
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "plan_id")
-  private Plan plan;
+  private FlightPlan plan;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "event_id")
-  private Event event;
+  private TrackingEvent event;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "scenario_id")
-  private Scenario scenario;
+  private ScenarioParameters scenario;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "algorithm_id")
