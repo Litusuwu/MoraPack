@@ -33,6 +33,6 @@ public class Customer {
   @JoinColumn(name = "person_id", nullable = false)
   private Customer person;
 
-  @OneToMany(mappedBy = "client", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+  @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
   private List<Order> orders;
 }
