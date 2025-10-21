@@ -1,7 +1,6 @@
 package com.system.morapack.dao.morapack_psql.model;
 
 import jakarta.persistence.*;
-
 import lombok.*;
 
 @Getter
@@ -10,16 +9,18 @@ import lombok.*;
 @AllArgsConstructor
 @NoArgsConstructor
 @Entity
-@Table(name = "cliente")
+@Table(name = "cities")
 public class City {
+
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   @Column(name = "id", nullable = false)
-  private Integer idCiudad;
+  private Integer id;
 
-  @Column(name = "name", nullable = false)
+  @Column(name = "name", nullable = false, length = 120)
   private String name;
 
-  @Column(name = "continent", nullable = false)
-  private String continent;
+  @Enumerated(EnumType.STRING)
+  @Column(name = "continent", nullable = false, length = 32)
+  private Continent continent;
 }
