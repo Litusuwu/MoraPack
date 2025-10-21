@@ -12,7 +12,7 @@ import java.util.Optional;
 @Repository
 public interface UserRepository extends JpaRepository<User, Integer> {
   Optional<User> findByNameAndLastName(String name, String lastName);
-  List<User> findByType(TypeUser type);
+  List<User> findByUserType(TypeUser userType);
   List<User> findByIdIn(List<Integer> ids);
   boolean existsByNameAndLastName(String name, String lastName);
   @Modifying

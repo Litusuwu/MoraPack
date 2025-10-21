@@ -18,8 +18,7 @@ import java.util.List;
 public class TravelPlan {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
-  @Column(name = "id")
-  private Integer idPlan;
+  private Integer id;
 
   @Column(name = "planning_date", nullable = false)
   private LocalDateTime planningDate;

@@ -45,8 +45,8 @@ public class UserService {
       user.setName(updates.getName());
     if (updates.getLastName() != null)
       user.setLastName(updates.getLastName());
-    if (updates.getType() != null)
-      user.setType(updates.getType());
+    if (updates.getUserType() != null)
+      user.setUserType(updates.getUserType());
 
     return userRepository.save(user);
   }
@@ -65,6 +65,6 @@ public class UserService {
 
   // Buscar usuarios por tipo (ejemplo: ADMIN, CLIENT, etc.)
   public List<User> getUsersByType(TypeUser type) {
-    return userRepository.findByType(type);
+    return userRepository.findByUserType(type);
   }
 }

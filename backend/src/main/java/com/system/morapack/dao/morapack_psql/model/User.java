@@ -23,7 +23,6 @@ import jakarta.persistence.OneToMany;
 public class User {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
-  @Column(name = "id")
   private Integer id;
 
   @Column(name = "name", nullable = false)
@@ -34,7 +33,7 @@ public class User {
 
   @Enumerated(EnumType.STRING)
   @Column(name = "user_type", nullable = false)
-  private TypeUser Type;
+  private TypeUser userType;
 
   @CreationTimestamp
   @Column(name = "creation_date", nullable = false, updatable = false)

@@ -17,6 +17,6 @@ public interface TravelPlanRepository extends JpaRepository<TravelPlan, Integer>
   List<TravelPlan> findByPlanningDateBetween(LocalDateTime start, LocalDateTime end);
   List<TravelPlan> findByIdIn(List<Integer> ids);
   @Modifying
-  @Query("DELETE FROM TravelPlan t WHERE t.idPlan IN :ids")
+  @Query("DELETE FROM TravelPlan t WHERE t.id IN :ids")
   void deleteAllByIdIn(List<Integer> ids);
 }
