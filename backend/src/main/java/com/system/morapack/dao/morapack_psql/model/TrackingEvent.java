@@ -36,6 +36,6 @@ public class TrackingEvent {
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "segment_id")
-  private Segment segment;
+  private FlightSegment segment;
 }
 

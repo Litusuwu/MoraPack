@@ -29,7 +29,7 @@ public class PerformanceMetric {
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "plan_id")
-  private FlightPlan plan;
+  private TravelPlan plan;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "event_id")
@@ -41,5 +41,5 @@ public class PerformanceMetric {
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "algorithm_id")
-  private Algorithm algorithm;
+  private AlgorithmParameter algorithm;
 }

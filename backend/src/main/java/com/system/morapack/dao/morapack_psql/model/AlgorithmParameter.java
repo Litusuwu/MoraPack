@@ -25,5 +25,5 @@ public class AlgorithmParameter {
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "plan_id")
-  private FlightPlan plan;
+  private TravelPlan plan;
 }
