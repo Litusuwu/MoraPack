@@ -1,4 +1,4 @@
-package com.system.morapack.dao.morapack_psql.controller;
+package com.system.morapack.dao.morapack_psql.service;
 
 import com.system.morapack.dao.morapack_psql.model.Customer;
 import com.system.morapack.dao.morapack_psql.repository.CustomerRepository;

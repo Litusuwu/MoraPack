@@ -1,4 +1,4 @@
-package com.system.morapack.dao.morapack_psql.controller;
+package com.system.morapack.dao.morapack_psql.service;
 
 import java.util.List;
 
@@ -10,7 +10,7 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-public class AccountController {
+public class AccountService {
   private final AccountRepository accountRepository;
 
   public Account getAccount(Integer id) {
