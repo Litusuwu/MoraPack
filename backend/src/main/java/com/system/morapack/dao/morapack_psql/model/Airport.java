@@ -1,6 +1,6 @@
 package com.system.morapack.dao.morapack_psql.model;
 
-import com.system.morapack.schemas.AirportState.java;
+import com.system.morapack.schemas.AirportState;
 import jakarta.persistence.*;
 import lombok.*;
 
