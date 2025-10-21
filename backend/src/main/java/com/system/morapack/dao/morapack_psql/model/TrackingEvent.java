@@ -1,5 +1,6 @@
 package com.system.morapack.dao.morapack_psql.model;
 
+import com.system.morapack.schemas.TrackingEventType.java;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -7,13 +8,7 @@ import java.time.LocalDateTime;
 @Getter @Setter @Builder
 @AllArgsConstructor @NoArgsConstructor
 @Entity
-@Table(name = "tracking_event",
-       indexes = {
-         @Index(name = "idx_te_city", columnList = "city_id"),
-         @Index(name = "idx_te_order", columnList = "order_id"),
-         @Index(name = "idx_te_segment", columnList = "segment_id"),
-         @Index(name = "idx_te_timestamp", columnList = "event_timestamp")
-       })
+@Table(name = "tracking_event")
 public class TrackingEvent {
 
   @Id
@@ -43,3 +38,4 @@ public class TrackingEvent {
   @JoinColumn(name = "segment_id")
   private Segment segment;
 }
+
