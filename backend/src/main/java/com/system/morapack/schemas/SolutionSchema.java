@@ -9,7 +9,7 @@ import java.util.Map;
 @Setter
 public class Solution {
     private List<Route> routes;
-    private Map<Package, Route> packageRouteMap;
+    private Map<OrderSchema, Route> packageRouteMap;
     private double totalCost;
     private double totalTime;
     private int undeliveredPackages;

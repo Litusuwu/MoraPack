@@ -12,10 +12,10 @@ import java.util.List;
 @NoArgsConstructor
 public class Route {
     private int id;
-    private List<Flight> flights;
-    private City originCity;
-    private City destinationCity;
+    private List<FlightSchema> flightSchemas;
+    private CitySchema originCitySchema;
+    private CitySchema destinationCitySchema;
     private double totalTime;
     private double totalCost;
-    private List<Package> packages;
+    private List<OrderSchema> orderSchemas;
 }

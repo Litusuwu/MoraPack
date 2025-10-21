@@ -9,7 +9,7 @@ import lombok.Setter;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class Product {
+public class ProductSchema {
     private int id;
     private StringBuilder assignedFlight;
     private Status status;
