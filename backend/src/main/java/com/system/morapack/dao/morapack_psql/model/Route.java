@@ -46,7 +46,7 @@ public class Route {
       joinColumns = @JoinColumn(name = "route_id"),
       inverseJoinColumns = @JoinColumn(name = "package_id")
   )
-  private List<Package> packages;
+  private List<Order> packages;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "solution_id")
