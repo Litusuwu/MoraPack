@@ -1,22 +1,18 @@
 package com.system.morapack.schemas;
 
-import java.util.List;
-
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
-@AllArgsConstructor
+@Builder
 @NoArgsConstructor
+@AllArgsConstructor
 public class UserSchema {
-  private int id;
+  private Integer id;
   private String name;
   private String lastName;
-  private TypeUser userType;
-  private String creationDate;
-  private String updatedDate;
-  private List<AccountSchema> accountSchemas;
+  private TypeUser type;
+  private LocalDateTime creationDate;
+  private LocalDateTime updatedDate;
 }
