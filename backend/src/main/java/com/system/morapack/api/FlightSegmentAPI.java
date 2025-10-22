@@ -50,6 +50,11 @@ public class FlightSegmentAPI {
     return ResponseEntity.ok(flightSegmentController.createFlightSegment(segment));
   }
 
+  @PostMapping("/bulk")
+  public ResponseEntity<List<FlightSegmentSchema>> createFlightSegments(@RequestBody List<FlightSegmentSchema> segments) {
+    return ResponseEntity.ok(flightSegmentController.bulkCreateFlightSegments(segments));
+  }
+
   @PutMapping("/{id}")
   public ResponseEntity<FlightSegmentSchema> updateFlightSegment(@PathVariable Integer id, @RequestBody FlightSegmentSchema updates) {
     return ResponseEntity.ok(flightSegmentController.updateFlightSegment(id, updates));

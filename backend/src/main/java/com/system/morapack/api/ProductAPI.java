@@ -42,6 +42,11 @@ public class ProductAPI {
     return ResponseEntity.ok(productController.createProduct(product));
   }
 
+  @PostMapping("/bulk")
+  public ResponseEntity<List<ProductSchema>> createProducts(@RequestBody List<ProductSchema> products) {
+    return ResponseEntity.ok(productController.bulkCreateProducts(products));
+  }
+
   @PutMapping("/{id}")
   public ResponseEntity<ProductSchema> updateProduct(@PathVariable Integer id, @RequestBody ProductSchema updates) {
     return ResponseEntity.ok(productController.updateProduct(id, updates));

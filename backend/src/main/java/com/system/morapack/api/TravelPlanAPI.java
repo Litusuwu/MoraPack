@@ -55,6 +55,11 @@ public class TravelPlanAPI {
     return ResponseEntity.ok(travelPlanController.createTravelPlan(travelPlan));
   }
 
+  @PostMapping("/bulk")
+  public ResponseEntity<List<TravelPlanSchema>> createTravelPlans(@RequestBody List<TravelPlanSchema> travelPlans) {
+    return ResponseEntity.ok(travelPlanController.bulkCreateTravelPlans(travelPlans));
+  }
+
   @PutMapping("/{id}")
   public ResponseEntity<TravelPlanSchema> updateTravelPlan(@PathVariable Integer id, @RequestBody TravelPlanSchema updates) {
     return ResponseEntity.ok(travelPlanController.updateTravelPlan(id, updates));

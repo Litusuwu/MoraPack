@@ -1,22 +1,25 @@
 package com.system.morapack.schemas;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 @Getter
 @Setter
+@Builder
 @AllArgsConstructor
 @NoArgsConstructor
 public class AirportSchema {
-  private int id;
+  private Integer id;
   private String codeIATA;
   private String alias;
-  private int timezoneUTC;
+  private Integer timezoneUTC;
   private String latitude;
   private String longitude;
-  private CitySchema citySchema;
+  private Integer cityId;
+  private String cityName;
   private AirportState state;
+  private Integer warehouseId;
+
+  // Legacy fields for algorithm compatibility
+  private CitySchema citySchema;
   private Warehouse warehouse;
 }

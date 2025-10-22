@@ -31,6 +31,11 @@ public class CustomerAPI {
     return ResponseEntity.ok(customerController.createCustomer(customer));
   }
 
+  @PostMapping("/bulk")
+  public ResponseEntity<List<CustomerSchema>> createCustomers(@RequestBody List<CustomerSchema> customers) {
+    return ResponseEntity.ok(customerController.bulkCreateCustomers(customers));
+  }
+
   @PutMapping("/{id}")
   public ResponseEntity<CustomerSchema> updateCustomer(@PathVariable Integer id, @RequestBody CustomerSchema updates) {
     return ResponseEntity.ok(customerController.updateCustomer(id, updates));

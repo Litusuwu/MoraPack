@@ -31,6 +31,11 @@ public class UserAPI {
     return ResponseEntity.ok(userController.createUser(user));
   }
 
+  @PostMapping("/bulk")
+  public ResponseEntity<List<UserSchema>> createUsers(@RequestBody List<UserSchema> users) {
+    return ResponseEntity.ok(userController.bulkCreateUsers(users));
+  }
+
   @PutMapping("/{id}")
   public ResponseEntity<UserSchema> updateUser(@PathVariable Integer id, @RequestBody UserSchema updates) {
     return ResponseEntity.ok(userController.updateUser(id, updates));

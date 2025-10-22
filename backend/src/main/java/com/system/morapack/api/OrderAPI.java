@@ -46,6 +46,11 @@ public class OrderAPI {
     return ResponseEntity.ok(orderController.createOrder(order));
   }
 
+  @PostMapping("/bulk")
+  public ResponseEntity<List<OrderSchema>> createOrders(@RequestBody List<OrderSchema> orders) {
+    return ResponseEntity.ok(orderController.bulkCreateOrders(orders));
+  }
+
   @PutMapping("/{id}")
   public ResponseEntity<OrderSchema> updateOrder(@PathVariable Integer id, @RequestBody OrderSchema updates) {
     return ResponseEntity.ok(orderController.updateOrder(id, updates));

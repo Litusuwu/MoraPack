@@ -47,6 +47,11 @@ public class AlertAPI {
     return ResponseEntity.ok(alertController.createAlert(alert));
   }
 
+  @PostMapping("/bulk")
+  public ResponseEntity<List<AlertSchema>> createAlerts(@RequestBody List<AlertSchema> alerts) {
+    return ResponseEntity.ok(alertController.bulkCreateAlerts(alerts));
+  }
+
   @PutMapping("/{id}")
   public ResponseEntity<AlertSchema> updateAlert(@PathVariable Integer id, @RequestBody AlertSchema updates) {
     return ResponseEntity.ok(alertController.updateAlert(id, updates));
