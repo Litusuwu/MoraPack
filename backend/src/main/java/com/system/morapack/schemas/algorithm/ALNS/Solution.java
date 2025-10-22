@@ -7,12 +7,16 @@ import com.system.morapack.schemas.OrderSchema;
 import com.system.morapack.schemas.algorithm.Input.InputAirports;
 import com.system.morapack.schemas.algorithm.Input.InputData;
 import com.system.morapack.schemas.algorithm.Input.InputProducts;
+import com.system.morapack.schemas.algorithm.Input.InputDataSource;
+import com.system.morapack.schemas.algorithm.Input.DataSourceFactory;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.PriorityQueue;
+import java.util.Comparator;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
@@ -52,6 +56,10 @@ public class Solution {
     private double coolingRate;
     private int maxIterations;
     private int segmentSize;
+
+    // NEW: Optimized validators and trackers (Issue fixes #2, #3, #4)
+    private RouteValidator routeValidator;  // Fixes Issue #3 (1-hour layover) and #4 (performance)
+    private ProductTracker productTracker;  // Fixes Issue #2 (product-level tracking)
     
     // Mecanismos de diversificación e intensificación
     private int stagnationCounter;
@@ -60,22 +68,41 @@ public class Solution {
     private int lastImprovementIteration;
     private double diversificationFactor;
     
-    // Pool de paquetes no asignados para expansión ALNS
-    private ArrayList<OrderSchema> unassignedPool;
-    
+    // OPTIMIZED: Pool de paquetes no asignados con PriorityQueue (Recomendación #4)
+    // Ordena automáticamente por urgencia (deadline más cercano primero)
+    private PriorityQueue<OrderSchema> unassignedPool;
+
     // Control de diversificación extrema / restart inteligente
     private int iterationsSinceSignificantImprovement;
     private int restartCount;
 
+    // NEW: Snapshot para rollback de cambios especulativos (Recomendación #2)
+    private HashMap<AirportSchema, int[]> temporalWarehouseSnapshot;
+
     
     public Solution() {
-        this.inputAirports = new InputAirports(Constants.AIRPORT_INFO_FILE_PATH);
+        // ========== MODULAR DATA SOURCE ==========
+        // Create data source based on Constants.DATA_SOURCE_MODE
+        // Supports FILE (data/ directory) and DATABASE (PostgreSQL) modes
+        InputDataSource dataSource = DataSourceFactory.createDataSource();
+        dataSource.initialize();
+
+        System.out.println("========================================");
+        System.out.println("DATA SOURCE: " + dataSource.getSourceName());
+        System.out.println("========================================");
+
         this.solution = new HashMap<>();
-        this.airportSchemas = inputAirports.readAirports();
-        this.inputData = new InputData(Constants.FLIGHTS_FILE_PATH, this.airportSchemas);
-        this.flightSchemas = inputData.readFlights();
-        this.inputProducts = new InputProducts(Constants.PRODUCTS_FILE_PATH, this.airportSchemas);
-        this.originalOrderSchemas = inputProducts.readProducts();
+
+        // Load data from selected source (FILE or DATABASE)
+        this.airportSchemas = dataSource.loadAirports();
+        this.flightSchemas = dataSource.loadFlights(this.airportSchemas);
+        this.originalOrderSchemas = dataSource.loadOrders(this.airportSchemas);
+
+        // Keep references to old file-based readers for backward compatibility
+        // (these will be null when using DATABASE mode, but not accessed)
+        this.inputAirports = null;
+        this.inputData = null;
+        this.inputProducts = null;
         
         // PATCH: Aplicar unitización si está habilitada
         if (ENABLE_PRODUCT_UNITIZATION) {
@@ -100,10 +127,18 @@ public class Solution {
         // Inicializar operadores ALNS
         this.destructionOperators = new ALNSDestruction();
         this.repairOperators = new ALNSRepair(airportSchemas, flightSchemas, warehouseOccupancy);
-        
+
+        // NEW: Initialize optimized validators and trackers
+        System.out.println("Inicializando RouteValidator (optimización O(1))...");
+        this.routeValidator = new RouteValidator(airportSchemas, flightSchemas);
+
+        System.out.println("Inicializando ProductTracker (seguimiento de productos)...");
+        this.productTracker = new ProductTracker();
+        this.productTracker.initializeFromOrders(this.orderSchemas);
+
         // Inicializar parámetros ALNS
         initializeALNSParameters();
-        
+
         // Inicializar ocupación de almacenes
         initializeWarehouseOccupancy();
         initializeTemporalWarehouseOccupancy();
@@ -144,8 +179,27 @@ public class Solution {
         this.lastImprovementIteration = 0;
         this.diversificationFactor = 1.0;
         
-        // Inicializar pool de paquetes no asignados
-        this.unassignedPool = new ArrayList<>();
+        // OPTIMIZED: Inicializar pool de paquetes no asignados con PriorityQueue
+        // Ordena por deadline (más urgente primero) - Recomendación #4
+        this.unassignedPool = new PriorityQueue<>(new Comparator<OrderSchema>() {
+            @Override
+            public int compare(OrderSchema p1, OrderSchema p2) {
+                // Ordenar por deadline (más cercano primero = mayor urgencia)
+                if (p1.getDeliveryDeadline() == null && p2.getDeliveryDeadline() == null) return 0;
+                if (p1.getDeliveryDeadline() == null) return 1; // nulls last
+                if (p2.getDeliveryDeadline() == null) return -1;
+
+                int deadlineComp = p1.getDeliveryDeadline().compareTo(p2.getDeliveryDeadline());
+                if (deadlineComp != 0) return deadlineComp;
+
+                // Tie-break por prioridad (mayor primero)
+                int priorityComp = Double.compare(p2.getPriority(), p1.getPriority());
+                if (priorityComp != 0) return priorityComp;
+
+                // Tie-break final por ID (Recomendación #3)
+                return Integer.compare(p1.getId(), p2.getId());
+            }
+        });
         
         // Inicializar control de restart inteligente
         this.iterationsSinceSignificantImprovement = 0;
@@ -183,10 +237,57 @@ public class Solution {
         // 4. Ejecutar algoritmo ALNS
         System.out.println("\n=== INICIANDO ALGORITMO ALNS ===");
         runALNSAlgorithm();
-        
+
+        // 4.5. NEW: Update product tracking after algorithm completes
+        System.out.println("\n=== ACTUALIZANDO SEGUIMIENTO DE PRODUCTOS ===");
+        updateProductTracking();
+
         // 5. Mostrar resultado final
         System.out.println("\n=== RESULTADO FINAL ALNS ===");
         this.printSolutionDescription(2);
+
+        // 5.5. NEW: Print product tracking summary
+        productTracker.printTrackingSummary();
+    }
+
+    /**
+     * NEW: Updates product tracking with final solution assignments
+     * Fixes Issue #2: Proper product-level tracking
+     */
+    private void updateProductTracking() {
+        // Get current solution from bestSolution (which has the best found solution)
+        HashMap<OrderSchema, ArrayList<FlightSchema>> currentSolution = null;
+        if (bestSolution != null && !bestSolution.isEmpty()) {
+            currentSolution = bestSolution.keySet().iterator().next();
+        }
+
+        if (currentSolution == null || currentSolution.isEmpty()) {
+            System.out.println("No hay solución para rastrear productos");
+            return;
+        }
+
+        // Assign each order's products to their routes
+        int productsTracked = 0;
+        for (Map.Entry<OrderSchema, ArrayList<FlightSchema>> entry : currentSolution.entrySet()) {
+            OrderSchema order = entry.getKey();
+            ArrayList<FlightSchema> route = entry.getValue();
+
+            // This updates ProductSchema.assignedFlight and status
+            productTracker.assignOrderToRoute(order, route);
+
+            int productCount = order.getProductSchemas() != null ? order.getProductSchemas().size() : 1;
+            productsTracked += productCount;
+        }
+
+        System.out.println("Productos rastreados: " + productsTracked);
+    }
+
+    /**
+     * NEW: Get product-level solution for API endpoint
+     * Returns Map<Product, List<Flight>> as specified in requirements
+     */
+    public Map<ProductSchema, ArrayList<FlightSchema>> getProductLevelSolution() {
+        return productTracker.getProductLevelSolution();
     }
     
     /**
@@ -242,17 +343,9 @@ public class Solution {
         }
         
         if (random.nextDouble() < expansionProbability) {
-            // Ordenar pool no asignado por urgencia (más urgentes primero)
+            // OPTIMIZED: PriorityQueue ya está ordenada por urgencia (Recomendación #4)
+            // No necesitamos ordenar, solo convertir a lista para acceso por índice
             ArrayList<OrderSchema> sortedUnassigned = new ArrayList<>(unassignedPool);
-            sortedUnassigned.sort((p1, p2) -> {
-                // Ordenar por deadline (más urgente primero)
-                LocalDateTime d1 = p1.getDeliveryDeadline();
-                LocalDateTime d2 = p2.getDeliveryDeadline();
-                if (d1 == null && d2 == null) return 0;
-                if (d1 == null) return 1;
-                if (d2 == null) return -1;
-                return d1.compareTo(d2);
-            });
             
             // Determinar cantidad a agregar según pool no asignado
             int dynamicMaxToAdd;
@@ -337,10 +430,17 @@ public class Solution {
         // Actualizar contadores
         restartCount++;
         iterationsSinceSignificantImprovement = 0;
-        
+
         // Reiniciar temperatura para mayor exploración
         temperature = 100.0;
-        
+
+        // NEW: Clear RouteValidator caches after significant solution changes
+        // This ensures cached validations don't interfere with new solution exploration
+        routeValidator.clearCaches();
+        if (Constants.VERBOSE_LOGGING) {
+            System.out.println("RouteValidator caches cleared for fresh exploration");
+        }
+
         // Actualizar el pool de no asignados
         updateUnassignedPool(newSolution);
         
@@ -480,8 +580,9 @@ public class Solution {
                 int priorityComparison = Double.compare(e2.getKey().getPriority(), e1.getKey().getPriority());
                 if (priorityComparison != 0) return priorityComparison;
                 
-                // Criterio de desempate final: Por hashCode para garantizar consistencia total
-                return Integer.compare(e1.getKey().hashCode(), e2.getKey().hashCode());
+                // FIXED: Criterio de desempate final por getId() en vez de hashCode()
+                // Recomendación #3: getId() es más estable y predecible
+                return Integer.compare(e1.getKey().getId(), e2.getKey().getId());
                 
             } catch (Exception ex) {
                 // Fallback seguro: usar solo propiedades básicas
@@ -1175,83 +1276,99 @@ public class Solution {
      * CHANGED: getAirportByCity usando cache robusta por nombre
      * Eliminada dependencia de equals/hashCode de objetos CitySchema
      */
+    /**
+     * OPTIMIZED: Uses RouteValidator for O(1) airport lookup (Issue #4 fix)
+     */
     private AirportSchema getAirportByCity(CitySchema citySchema) {
-        if (citySchema == null || citySchema.getName() == null) return null;
-        String cityKey = citySchema.getName().toLowerCase().trim();
-        return cityNameToAirportCache.get(cityKey);
+        // Delegate to RouteValidator for optimized O(1) lookup
+        return routeValidator.getAirportByCity(citySchema);
     }
     
     /**
-     * PATCH: Implementar findDirectRoute (método crítico)
+     * OPTIMIZED: Uses RouteValidator for O(1) flight lookup (Issue #4 fix)
+     * Before: O(f) linear search through all flights
+     * After: O(1) HashMap lookup via RouteValidator
      */
     private ArrayList<FlightSchema> findDirectRoute(CitySchema origin, CitySchema destination) {
         AirportSchema originAirportSchema = getAirportByCity(origin);
         AirportSchema destAirportSchema = getAirportByCity(destination);
-        
+
         if (originAirportSchema == null || destAirportSchema == null) return null;
-        
-        // Buscar vuelo directo entre aeropuertos
-        for (FlightSchema flightSchema : flightSchemas) {
-            if (flightSchema.getOriginAirportSchema().equals(originAirportSchema) &&
-                flightSchema.getDestinationAirportSchema().equals(destAirportSchema) &&
-                flightSchema.getUsedCapacity() < flightSchema.getMaxCapacity()) {
-                ArrayList<FlightSchema> route = new ArrayList<>();
-                route.add(flightSchema);
-                return route;
-            }
+
+        // Use RouteValidator's O(1) flight lookup
+        FlightSchema directFlight = routeValidator.findDirectFlight(originAirportSchema, destAirportSchema);
+
+        if (directFlight != null) {
+            ArrayList<FlightSchema> route = new ArrayList<>();
+            route.add(directFlight);
+            return route;
         }
-        
+
         return null; // No hay vuelo directo
     }
     
     /**
-     * PATCH: Implementar isRouteValid (método crítico)
+     * OPTIMIZED: Uses RouteValidator with 1-hour layover enforcement (Issues #3, #4 fix)
+     * This now properly validates:
+     * - Minimum 1-hour layover at intermediate stops (Issue #3)
+     * - All route constraints with cached validation (Issue #4)
      */
     private boolean isRouteValid(OrderSchema pkg, ArrayList<FlightSchema> route) {
-        if (pkg == null || route == null || route.isEmpty()) return false;
-        
-        // Cantidad de productos (qty)
-        int qty = (pkg.getProductSchemas() != null && !pkg.getProductSchemas().isEmpty()) ? pkg.getProductSchemas().size() : 1;
-        
-        // 1) Validar capacidad de todos los vuelos en la ruta para qty
-        if (!fitsCapacity(route, qty)) return false;
-        
-        // 2) Origen correcto
-        AirportSchema expectedOrigin = getAirportByCity(pkg.getCurrentLocation());
-        if (expectedOrigin == null || !route.get(0).getOriginAirportSchema().equals(expectedOrigin)) return false;
-        
-        // 3) Continuidad de la ruta
-        for (int i = 0; i < route.size() - 1; i++) {
-            if (!route.get(i).getDestinationAirportSchema().equals(route.get(i + 1).getOriginAirportSchema())) {
-                return false;
-            }
-        }
-        
-        // 4) Destino correcto y deadline respetado
-        AirportSchema expectedDestination = getAirportByCity(pkg.getDestinationCitySchema());
-        if (expectedDestination == null || 
-            !route.get(route.size() - 1).getDestinationAirportSchema().equals(expectedDestination)) {
-            return false;
-        }
-        
-        // 5) Deadline respetado
-        return isDeadlineRespected(pkg, route);
+        // Delegate to RouteValidator which includes:
+        // - 1-hour minimum layover validation
+        // - Optimized lookups (O(1))
+        // - Cached deadline validation
+        // - MoraPack delivery promise validation
+        return routeValidator.isRouteValidWithLayoverCheck(pkg, route);
     }
     
     /**
-     * PATCH: Implementar canAssignWithSpaceOptimization (método crítico)
+     * FIXED: Validar capacidad de almacén para TODA la ruta (no solo destino final)
+     * CRÍTICO: Recomendación #1 - Debe validar todos los aeropuertos intermedios
      */
     private boolean canAssignWithSpaceOptimization(OrderSchema pkg, ArrayList<FlightSchema> route,
                                                    HashMap<OrderSchema, ArrayList<FlightSchema>> currentSolution) {
-        // Validación simplificada de capacidad de almacén final
-        AirportSchema destinationAirportSchema = getAirportByCity(pkg.getDestinationCitySchema());
-        if (destinationAirportSchema == null) return false;
-        
+        if (route == null || route.isEmpty()) {
+            // Ruta vacía = paquete ya en destino, solo validar destino
+            AirportSchema destinationAirportSchema = getAirportByCity(pkg.getDestinationCitySchema());
+            if (destinationAirportSchema == null || destinationAirportSchema.getWarehouse() == null) {
+                return false;
+            }
+            int productCount = pkg.getProductSchemas() != null ? pkg.getProductSchemas().size() : 1;
+            int currentOccupancy = warehouseOccupancy.getOrDefault(destinationAirportSchema, 0);
+            int maxCapacity = destinationAirportSchema.getWarehouse().getMaxCapacity();
+            return (currentOccupancy + productCount) <= maxCapacity;
+        }
+
         int productCount = pkg.getProductSchemas() != null ? pkg.getProductSchemas().size() : 1;
-        int currentOccupancy = warehouseOccupancy.getOrDefault(destinationAirportSchema, 0);
-        int maxCapacity = destinationAirportSchema.getWarehouse().getMaxCapacity();
-        
-        return (currentOccupancy + productCount) <= maxCapacity;
+
+        // CRITICAL FIX: Validar TODOS los aeropuertos en la ruta (incluyendo intermedios)
+        for (int i = 0; i < route.size(); i++) {
+            FlightSchema flight = route.get(i);
+            AirportSchema arrivalAirport = flight.getDestinationAirportSchema();
+
+            if (arrivalAirport == null || arrivalAirport.getWarehouse() == null) {
+                if (Constants.VERBOSE_LOGGING) {
+                    System.out.println("Warehouse validation failed: No warehouse at " +
+                                     (arrivalAirport != null ? arrivalAirport.getCitySchema().getName() : "null"));
+                }
+                return false;
+            }
+
+            // Validar capacidad de este almacén
+            int currentOccupancy = warehouseOccupancy.getOrDefault(arrivalAirport, 0);
+            int maxCapacity = arrivalAirport.getWarehouse().getMaxCapacity();
+
+            if ((currentOccupancy + productCount) > maxCapacity) {
+                if (Constants.VERBOSE_LOGGING) {
+                    System.out.println("Warehouse capacity exceeded at " + arrivalAirport.getCitySchema().getName() +
+                                     ": " + (currentOccupancy + productCount) + " > " + maxCapacity);
+                }
+                return false;
+            }
+        }
+
+        return true; // Todos los almacenes tienen capacidad
     }
     
     /**
@@ -2489,6 +2606,65 @@ public class Solution {
         final int TOTAL_MINUTES = HORIZON_DAYS * 24 * 60; // 5760 minutos (4 días)
         for (AirportSchema airportSchema : airportSchemas) {
             temporalWarehouseOccupancy.put(airportSchema, new int[TOTAL_MINUTES]);
+        }
+    }
+
+    /**
+     * NEW: Crea un snapshot del estado actual de temporalWarehouseOccupancy
+     * CRÍTICO: Recomendación #2 - Para rollback de cambios especulativos
+     */
+    private void snapshotTemporalWarehouse() {
+        if (temporalWarehouseOccupancy == null || temporalWarehouseOccupancy.isEmpty()) {
+            temporalWarehouseSnapshot = new HashMap<>();
+            return;
+        }
+
+        temporalWarehouseSnapshot = new HashMap<>();
+        final int TOTAL_MINUTES = HORIZON_DAYS * 24 * 60;
+
+        for (Map.Entry<AirportSchema, int[]> entry : temporalWarehouseOccupancy.entrySet()) {
+            AirportSchema airport = entry.getKey();
+            int[] original = entry.getValue();
+
+            // Deep copy del array
+            int[] copy = new int[TOTAL_MINUTES];
+            System.arraycopy(original, 0, copy, 0, TOTAL_MINUTES);
+
+            temporalWarehouseSnapshot.put(airport, copy);
+        }
+
+        if (Constants.VERBOSE_LOGGING) {
+            System.out.println("Temporal warehouse snapshot created");
+        }
+    }
+
+    /**
+     * NEW: Restaura el estado desde el snapshot
+     * CRÍTICO: Recomendación #2 - Para rollback cuando una asignación especulativa falla
+     */
+    private void restoreTemporalWarehouse() {
+        if (temporalWarehouseSnapshot == null || temporalWarehouseSnapshot.isEmpty()) {
+            if (Constants.VERBOSE_LOGGING) {
+                System.out.println("Warning: No snapshot available to restore");
+            }
+            return;
+        }
+
+        final int TOTAL_MINUTES = HORIZON_DAYS * 24 * 60;
+
+        for (Map.Entry<AirportSchema, int[]> entry : temporalWarehouseSnapshot.entrySet()) {
+            AirportSchema airport = entry.getKey();
+            int[] snapshotArray = entry.getValue();
+
+            // Deep copy de vuelta
+            int[] current = temporalWarehouseOccupancy.get(airport);
+            if (current != null) {
+                System.arraycopy(snapshotArray, 0, current, 0, TOTAL_MINUTES);
+            }
+        }
+
+        if (Constants.VERBOSE_LOGGING) {
+            System.out.println("Temporal warehouse restored from snapshot");
         }
     }
     

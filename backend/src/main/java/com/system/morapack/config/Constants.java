@@ -35,7 +35,7 @@ public class Constants {
     public static final int CUSTOMER_PICKUP_MAX_HOURS = 2;
     
     // NEW: Control de tipo de solución inicial
-    public static final boolean USE_GREEDY_INITIAL_SOLUTION = false; // true=greedy, false=random
+    public static final boolean USE_GREEDY_INITIAL_SOLUTION = true; // true=greedy, false=random
     public static final double RANDOM_ASSIGNMENT_PROBABILITY = 0.3; // Para solución random: 30% de asignación
     
     // Control de logs
@@ -70,9 +70,28 @@ public class Constants {
     
     // Temporal validation constants
     public static final int HORIZON_DAYS = 4; // 4 días de horizonte temporal
-    public static final int CONNECTION_TIME_MINUTES = 120; // 2 horas de conexión
+    public static final int MIN_LAYOVER_TIME_MINUTES = 60; // CRITICAL: Minimum 1 hour layover at intermediate stops
+    public static final int CONNECTION_TIME_MINUTES = 120; // 2 horas de conexión (includes minimum layover)
     public static final int PRE_FLIGHT_PROCESSING_MINUTES = 120; // 2 horas antes del vuelo
     
     // MoraPack headquarters validation
     public static final boolean VALIDATE_HEADQUARTERS_ORIGIN = true;
+
+    // ========== DATA SOURCE CONFIGURATION ==========
+    /**
+     * Defines where the algorithm gets its input data from:
+     * - FILE: Reads from data/ directory (airportInfo.txt, flights.txt, products.txt)
+     * - DATABASE: Reads from PostgreSQL database via repositories
+     *
+     * Change this constant to switch between file-based and database-based input.
+     */
+    public static final DataSourceMode DATA_SOURCE_MODE = DataSourceMode.DATABASE;
+
+    /**
+     * Enum for data source selection
+     */
+    public enum DataSourceMode {
+        FILE,       // Read from data/ directory files (current implementation)
+        DATABASE    // Read from PostgreSQL database via Spring Data JPA
+    }
 }
