@@ -1,16 +1,20 @@
 package com.system.morapack.schemas;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@Builder
 @AllArgsConstructor
 @NoArgsConstructor
 public class ProductSchema {
-    private int id;
+    private Integer id;
+    private String name;
+    private Double weight;
+    private Double volume;
+    private LocalDateTime creationDate;
+    private Integer orderId;
     private StringBuilder assignedFlight;
     private Status status;
 }

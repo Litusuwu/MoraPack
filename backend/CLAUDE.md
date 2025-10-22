@@ -292,7 +292,4 @@ This is the core of the problem.
 Im using java 17 with spring; I am also building the backend for the problem, my approach is to get the REST API to reach the database and change constantly the track of the orders, his status and also the flights, airports and the status; so the front-end in other project its going to reach the endpoints to update it. Also, theres an endpoint in the backend that returns the solution structure, it should be the 'map[products, array[flights]]' but i need to do some tasks first.
 
 
-1. Optimize the algorithm and make sure it works and solve the problem statement and all the requirements
-2. Use Products and Orders, i think in the actual algorithm are only using the OrderSchema data structure but not using the Products.
-3. The algorithm is not solving with the constraint 'Los tiempos de estancia mínima para los productos en tránsito (destino intermedio) es de 1 hora.'
-4. I think the algorithm has some problems, solve them
+1. Do the endpoints
