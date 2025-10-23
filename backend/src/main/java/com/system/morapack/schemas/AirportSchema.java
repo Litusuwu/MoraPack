@@ -21,5 +21,5 @@ public class AirportSchema {
 
   // Legacy fields for algorithm compatibility
   private CitySchema citySchema;
-  private Warehouse warehouse;
+  private WarehouseSchema warehouse;
 }

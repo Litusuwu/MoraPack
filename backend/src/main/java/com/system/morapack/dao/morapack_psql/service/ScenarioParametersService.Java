@@ -11,7 +11,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-public class ScenarioParametersService {
+public class ScenarioParametersService{
 
   private final ScenarioParametersRepository repository;
 

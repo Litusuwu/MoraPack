@@ -6,6 +6,7 @@ import com.system.morapack.dao.morapack_psql.model.Customer;
 import com.system.morapack.dao.morapack_psql.model.Flight;
 import com.system.morapack.dao.morapack_psql.model.Order;
 import com.system.morapack.dao.morapack_psql.model.Product;
+import com.system.morapack.dao.morapack_psql.model.Warehouse;
 import com.system.morapack.dao.morapack_psql.service.AirportService;
 import com.system.morapack.dao.morapack_psql.service.FlightService;
 import com.system.morapack.dao.morapack_psql.service.OrderService;
@@ -18,7 +19,9 @@ import com.system.morapack.schemas.OrderSchema;
 import com.system.morapack.schemas.PackageStatus;
 import com.system.morapack.schemas.ProductSchema;
 import com.system.morapack.schemas.Status;
-import com.system.morapack.schemas.Warehouse;
+import com.system.morapack.schemas.WarehouseSchema;
+
+import com.system.morapack.bll.adapter.WarehouseAdapter;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -161,7 +164,7 @@ public class DatabaseInputDataSource implements InputDataSource {
 
         // Convert Warehouse
         if (airport.getWarehouse() != null) {
-            Warehouse warehouse = convertToWarehouse(airport.getWarehouse());
+            WarehouseSchema warehouse = convertToWarehouse(airport.getWarehouse());
             airportSchema.setWarehouse(warehouse);
         }
 
@@ -262,14 +265,21 @@ public class DatabaseInputDataSource implements InputDataSource {
     /**
      * Converts JPA Warehouse entity to Warehouse schema
      */
-    private Warehouse convertToWarehouse(com.system.morapack.dao.morapack_psql.model.Warehouse warehouseEntity) {
-        Warehouse warehouse = new Warehouse();
-
-        warehouse.setId(warehouseEntity.getId());
-        warehouse.setMaxCapacity(warehouseEntity.getMaxCapacity());
-        warehouse.setUsedCapacity(warehouseEntity.getUsedCapacity() != null ? warehouseEntity.getUsedCapacity() : 0);
-
-        return warehouse;
+    private WarehouseSchema convertToWarehouse(com.system.morapack.dao.morapack_psql.model.Warehouse w) {
+        WarehouseSchema s = new WarehouseSchema();
+        s.setId(w.getId());
+        s.setName(w.getName());
+        s.setMaxCapacity(w.getMaxCapacity());
+        s.setUsedCapacity(w.getUsedCapacity());
+        s.setIsMainWarehouse(w.getIsMainWarehouse()); // o setMainWarehouse(...) según tu schema
+        // si quieres exponer info básica del airport:
+        if (w.getAirport() != null) {
+            AirportSchema a = new AirportSchema();
+            a.setId(w.getAirport().getId());
+            a.setCodeIATA(w.getAirport().getCodeIATA());
+            s.setAirportSchema(a);
+        }
+        return s;
     }
 
     /**

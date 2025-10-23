@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.system.morapack.bll.adapter.WarehouseAdapter;
+
 public class InputAirports {
 
     private ArrayList<AirportSchema> airportSchemas;
@@ -137,12 +139,12 @@ public class InputAirports {
                     }
                     
                     // Create Warehouse for the airportSchema
-                    Warehouse warehouse = new Warehouse();
+                    WarehouseSchema warehouse = new WarehouseSchema();
                     warehouse.setId(id);
                     warehouse.setMaxCapacity((int)maxCapacity);
                     warehouse.setUsedCapacity(0);
                     warehouse.setName(cityName + " Warehouse");
-                    warehouse.setMainWarehouse(false);
+                    warehouse.setIsMainWarehouse(false);
                     
                     // Create AirportSchema object
                     AirportSchema airportSchema = new AirportSchema();
